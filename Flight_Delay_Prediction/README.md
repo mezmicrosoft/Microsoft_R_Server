@@ -16,11 +16,13 @@ Prepare the Data
 
 Train the Model
 
-- [Step 4: Choose and apply a learning algorithm](#anchor-4)
+- [Step 4A: Choose and apply a learning algorithm (Logistic Regression)](#anchor-4A)
+- [Step 4B: Choose and apply a learning algorithm (Decision Tree)](#anchor-4B)
 
 Score and Test the Model
 
-- [Step 5: Predict over new data](#anchor-5)
+- [Step 5A: Predict over new data (Logistic Regression)](#anchor-5A)
+- [Step 5B: Predict over new data (Decision Tree)](#anchor-5B)
 
 ------------------------------------------
 
@@ -38,22 +40,20 @@ These columns contain the following information:
 - _CRSArrTime_ - CRS arrival time in local time(hhmm)
 - _ArrDelay_ - Difference in minutes between the scheduled and actual arrival times. Early arrivals show negative numbers.
 - _ArrDel15_ - A Boolean value indicating whether the arrival was delayed by 15 minutes or more (1=Arrival was delayed)
-- _Cancelled_ - A Boolean value indicating whether the arrivalflight was cancelled  (1=Flight was cancelled)
-
-We also used a set of weather observations: **[Hourly land-based weather observations from NOAA](http://cdo.ncdc.noaa.gov/qclcd_ascii/).**
+- _Cancelled_ - A Boolean value indicating whether the arrival flight was cancelled  (1=Flight was cancelled)
 
 **Weather Data.csv** includes the following 14 columns: _AirportID_, _Year_, _AdjustedMonth_, _AdjustedDay_, _AdjustedHour_, _TimeZone_, _Visibility_,  _DryBulbFarenheit_, _DryBulbCelsius_, _DewPointFarenheit_, _DewPointCelsius_, _RelativeHumidity_, _WindSpeed_, _Altimeter_
 
 
 ## <a name="anchor-1"></a> Step 1: Import Data
 
-The `RevoScaleR`, comes with Microsoft R Server, provides tools for scalable data management and analysis. It contains a wide range of `rx` functions that include functionality for:
+The `RevoScaleR`, comes with Microsoft R Server, provides tools for scalable data management and analysis. It contains a wide range of `rx` prefixed functions that include functionality for:
 1. Accessing external data sets (SAS, SPSS, ODBC, Teradata, and delimited and fixed format text) for analysis in R.
 2. Efficiently storing and retrieving data in a high performance data file.
 3. Cleaning, exploring, and manipulating data.
 4. Fast, basic statistical analyses.
 
-`rxImport` can a import comma-delimited text file to a `.xdf` file. The `.xdf` data file format, designed for fast processing of blocks of data. The class of `flight` object is `RxXdfData`.
+`rxImport()` can import a comma-delimited text file to a `.xdf` file. The `.xdf` data file format, designed for fast processing of blocks of data. The class of `flight` object is `RxXdfData`.
 ```
 # Import the flight data.
 flight <- rxImport(inData = inputFileFlight, outFile = outFileFlight,
@@ -65,31 +65,35 @@ weather <- rxImport(inData = inputFileWeather, outFile = outFileWeather,
                     varsToDrop = c('Year', 'Timezone', 'DryBulbFarenheit', 'DewPointFarenheit'),
                     overwrite=TRUE)
 ```
-Open source R functions, such as `dim()`, `head()`, `ncol()`, `nrow()`, `summary()`, can also be applied to `RxXdfData` class objects.
+Open source R functions, such as `dim()`, `head()`, `ncol()`, `nrow()`, can also be applied to `RxXdfData` class objects.
 
-Examine the imported datasets.
+Now, let's examine the imported datasets.
 ```
 dim(flight)  # 2719418 rows * 14 columns.
 head(flight)  # Review the first 6 rows of flight data.
 nrow(weather)  # 404914 rows in weather data.
 ncol(weather)  # 10 columns in weather data.
 ```
-Get .xdf File Information.
+
+We can also get .xdf File Information by using `rxGetInfo()`.
 ```
 rxGetInfo(flight)
 ```
 ![][image1]
-Get variable information of flight data.
+
+And get variable information of flight data by using `rxGetVarInfo`.
 ```
 rxGetVarInfo(flight)
 ```
 ![][image2]
-Summary the flight data.
+
+Summary the flight data is easy by using `rxSummary()`.
 ```
 rxSummary(~., data = flight, blocksPerRead = 2)
 ```
 ![][image3]
-Summary the weather data.
+
+The Open Source R `summary()` can also generate a similar data summary.
 ```
 summary(weather)
 ```
@@ -98,12 +102,14 @@ summary(weather)
 
 ## <a name="anchor-2"></a> Step 2: Pre-process Data
 
-Remove columns that are possible target leakers from the flight data. `varsToDrop` character vector of variable names to exclude when reading from the input data file.
+A dataset usually requires some pre-processing before it can be analyzed.
+
+First, we remove columns that are possible target leakers from the flight data. `varsToDrop` is a character vector of variable names to exclude when reading from the input data file.
 ```
 varsToDrop <- c('DepDelay', 'DepDel15', 'ArrDelay', 'Cancelled', 'Year')
 ```
 
-Round down scheduled departure time (`CSRDepTime` column in the flight data) to the full hour so that it can be used as a joining key to concatenate with the weather data. `rxDataStep` can transform data from an input data set to an output data set.
+We also round down scheduled departure time (`CSRDepTime` column in the flight data) to the full hour so that it can be used as a joining key to concatenate with the weather data. `rxDataStep()` can transform data from an input data set to an output data set.
 ```
 xform <- function(dataList) {
   # Create a new continuous variable from an existing continuous variables:
@@ -123,131 +129,214 @@ flight <- rxDataStep(inData = flight,
                            )
 ```
 
+To prepare the data for the merging later, we rename some column names in the weather data.
+```
+xform2 <- function(dataList) {
+  # Create a new column 'DestAirportID' in weather data.
+  dataList$DestAirportID <- dataList$AirportID
+  # Rename 'AdjustedMonth', 'AdjustedDay', 'AirportID', 'AdjustedHour'.
+  names(dataList)[match(c('AdjustedMonth', 'AdjustedDay', 'AirportID', 'AdjustedHour'),
+                 names(dataList))] <- c('Month', 'DayofMonth', 'OriginAirportID', 'CRSDepTime')
 
+  # Return the adapted variable list.
+  return(dataList)
+}
+weather <- rxDataStep(inData = weather,
+                      outFile = outFileWeather2,
+                      transformFunc = xform2,
+                      transformVars = c('AdjustedMonth', 'AdjustedDay', 'AirportID', 'AdjustedHour'),
+                      overwrite=TRUE
+                      )
+```            
+Then we can join flight and weather data using keys `Month`, `DayofMonth`, `OriginAirportID`, and `CRSDepTime`. `rxMerge()` can merge variables from two sorted `.xdf` files or data frames on one or more match variables.
+1. Join flight records and weather data at origin of the flight (OriginAirportID).
+```
+originData <- rxMerge(inData1 = flight, inData2 = weather, outFile = outFileOrigin,
+                      type = 'inner', autoSort = TRUE, decreasing = FALSE,
+                      matchVars = c('Month', 'DayofMonth', 'OriginAirportID', 'CRSDepTime'),
+                      varsToDrop2 = 'DestAirportID',
+                      overwrite=TRUE
+                      )
+```                  
+
+2. Join flight records and weather data using the destination of the flight (DestAirportID).
+```
+destData <- rxMerge(inData1 = originData, inData2 = weather, outFile = outFileDest,
+                    type = 'inner', autoSort = TRUE, decreasing = FALSE,
+                    matchVars = c('Month', 'DayofMonth', 'DestAirportID', 'CRSDepTime'),
+                    varsToDrop2 = c('OriginAirportID'),
+                    duplicateVarExt = c("Origin", "Destination"),
+                    overwrite=TRUE
+                    )
+```
+
+Since some numerical features are not standerlized between 0 and 1 scale, we use `scale()` to normalize the column of numeric values. Also, `OriginAirportID` and `DestAirportID` need to be treated as categorical features because each numeric value in those two columns represents different airport.
+```
+finalData <- rxDataStep(inData = destData, outFile = outFileFinal,
+                      transforms = list(
+                                        # Normalize some numerical features
+                                        Visibility.Origin = scale(Visibility.Origin),
+                                        DryBulbCelsius.Origin = scale(DryBulbCelsius.Origin),
+                                        DewPointCelsius.Origin = scale(DewPointCelsius.Origin),
+                                        RelativeHumidity.Origin = scale(RelativeHumidity.Origin),
+                                        WindSpeed.Origin = scale(WindSpeed.Origin),
+                                        Altimeter.Origin = scale(Altimeter.Origin),
+                                        Visibility.Destination = scale(Visibility.Destination),
+                                        DryBulbCelsius.Destination = scale(DryBulbCelsius.Destination),
+                                        DewPointCelsius.Destination = scale(DewPointCelsius.Destination),
+                                        RelativeHumidity.Destination = scale(RelativeHumidity.Destination),
+                                        WindSpeed.Destination = scale(WindSpeed.Destination),
+                                        Altimeter.Destination = scale(Altimeter.Destination),
+
+                                        # Convert 'OriginAirportID', 'DestAirportID' to categorical features
+                                        OriginAirportID = factor(OriginAirportID),
+                                        DestAirportID = factor(DestAirportID)
+                                        ),
+                      overwrite=TRUE
+                      )
+```
 
 
 ## <a name="anchor-3"></a> Step 3: Prepare Training and Test Datasets
 
-## <a name="anchor-4"></a> Step 4: Choose and apply a learning algorithm
-
-## <a name="anchor-5"></a> Step 5: Predict over new data
-
-A dataset usually requires some pre-processing before it can be analyzed.
-
-![][image8]
-
-
-**Flight Data Preprocessing**
-
-First, we used the [**Project Columns**](https://msdn.microsoft.com/library/azure/1ec722fa-b623-4e26-a44e-a50c6d726223) module to exclude from the dataset columns that are possible target leakers: _DepDelay_, _DepDel15_, _ArrDelay_, _Cancelled_, _Year_.
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight1.PNG)
-
-The columns _Carrier_, _OriginAirportID_, and _DestAirportID_ represent categorical attributes. However, because they are integers, they are initially parsed as continuous numbers; therefore, we used the [**Metadata Editor**](https://msdn.microsoft.com/library/azure/370b6676-c11c-486f-bf73-35349f842a66) module to convert them to categorical.
+Before choosing and applying a learning algorithm to predict whether the flight will be delayed by more than 15 minutes, we randomly split 80% data as training set and the remaining 20% as test set. `rxExec()` allows distributed execution of a function in parallel across nodes (computers) or cores of a _compute context_ such as a cluster.
+```
+rxExec(rxSplit, inData = finalData,
+       outFilesBase="finalData",
+       outFileSuffixes=c("Train", "Test"),
+       splitByFactor="splitVar",
+       overwrite=TRUE,
+       transforms=list(splitVar = factor(sample(c("Train", "Test"), size=.rxNumRows, replace=TRUE, prob=c(.80, .10)),
+                       levels= c("Train", "Test"))),
+       rngSeed=17,
+       consoleOutput=TRUE
+       )
+```
 
 
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight2.PNG)
+## <a name="anchor-4A"></a> Step 4A: Choose and apply a learning algorithm (Logistic Regression)
+
+Since this example is a binary classification problem, we decide to use two different classification models to solve this problem and compare their results.
+
+The first model we build is a Logistic Regression model using the `rxLogit()` function. Since the formula `dot(.)` expansion is currently not supported, we need to build the formula between `ArrDel15` and other independent variables as below.
+```
+# Build the formula.
+allvars <- names(finalData)
+xvars <- allvars[allvars !='ArrDel15']
+form <- as.formula(paste("ArrDel15", "~", paste(xvars, collapse = "+")))  
+
+# Build a Logistic Regression model.
+logitModel <- rxLogit(form, data = 'finalData.splitVar.Train.xdf')
+summary(logitModel)
+```
 
 
-We need to join the flight records with the hourly weather records, using the scheduled departure time as one of the join keys. To do this, the _CSRDepTime_ column must be rounded down to the nearest hour using two successive instances of the [**Apply Math Operation**](https://msdn.microsoft.com/library/azure/6bd12c13-d9c3-4522-94d3-4aa44513af57) module.
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight6.PNG)
+## <a name="anchor-5A"></a> Step 5A: Predict over new data (Logistic Regression)
 
-**Weather Data Preprocessing**
+Once we learn the algorithm on the training dataset, we can predict the probability of a flight is going to delay on the test dataset. In the `rxPredict`, we choose `type = 'response'` because the predictions are on the scale of the response variable in the range of (0, 1).
+```
+predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.xdf',
+                          outData = 'logitTest.xdf',
+                          type = 'response', overwrite = TRUE)
+```
+Let's take a look of the first 5 rows of the prediction results. The `ArrDel15_Pred` column contains the predictions.
+```
+rxGetInfo(predictLogit, getVarInfo = TRUE, numRows = 5)
+```
+![][image5]
 
-Columns that have a large proportion of missing values are excluded using the [**Project Columns**](https://msdn.microsoft.com/library/azure/1ec722fa-b623-4e26-a44e-a50c6d726223) module. These include all string-valued columns: _ValueForWindCharacter_, _WetBulbFarenheit_, _WetBulbCelsius_, _PressureTendency_, _PressureChange_, _SeaLevelPressure_, and _StationPressure_.
+By setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed).
+```
+testDF <- rxImport('finalData.splitVar.Test.xdf')
+predictDF <- rxImport('logitTest.xdf')
+predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred < 0.5)] <- 0
+predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred >= 0.5)] <- 1
+```
 
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight7.PNG) The [**Clean Missing Data**](https://msdn.microsoft.com/library/azure/d2c5ca2f-7323-41a3-9b7e-da917c99f0c4) module is then applied to the remaining columns to remove rows with missing data.
+In order to evaluate how the model performs, we calculate the `Area Under the Curve (AUC)`. `AUC` is a metric used to judge predictions in binary response (0/1) problem. As we can see in the result, the Logistic Regression model has a AUC of 0.6998.
+```
+auc <- function(outcome, prob){
+  N <- length(prob)
+  N_pos <- sum(outcome)
+  df <- data.frame(out = outcome, prob = prob)
+  df <- df[order(-df$prob),]
+  df$above <- (1:N) - cumsum(df$out)
+  return( 1- sum( df$above * df$out ) / (N_pos * (N-N_pos) ) )
+}
+auc(testDF$ArrDel15, predictDF$ArrDel15_Pred)
+```
 
-The time of the weather observation is rounded up to the nearest full hour, so that the column can be equi-joined with the scheduled flight departure time. Note that the scheduled flight time and the weather observation times are rounded in opposite directions. This is done to ensure that the model uses only weather observations that happened in the past, relative to flight time. Also note that the weather data is reported in local time, but the origin and destination may be in different time zones. Therefore, an adjustment to time zone difference must be made by subtracting the time zone columns from the scheduled departure time (_CRSDepTime_) and weather observation time (_Time_). These operations are done using the [**Execute R Script**](https://msdn.microsoft.com/en-us/library/azure/dn905952.aspx) module.
-
-
-<!--
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight9.PNG)
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight10.PNG)
--->
-
-The resulting columns are _Year_, _AdjustedMonth_, _AdjustedDay_, _AirportID_, _AdjustedHour_, _Timezone_, _Visibility_, _DryBulbFarenheit_, _DryBulbCelsius_, _DewPointFarenheit_, _DewPointCelsius_, _RelativeHumidity_, _WindSpeed_, _Altimeter_.
-
-**Joining Datasets**
-
-Flight records are joined with weather data at origin of the flight (_OriginAirportID_) by using the [**Join**](https://msdn.microsoft.com/library/azure/124865f7-e901-4656-adac-f4cb08248099) module.
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v2/4/flight11.PNG)
-
-<!--
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight12.PNG) ![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight13.PNG)
--->
-
-Flight records are joined with weather data using the destination of the flight (_DestAirportID_).
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v2/4/flight14.PNG)
-
-**Preparing Training and Validation Samples**
-
-The training and validation samples are created by using the [**Split**](https://msdn.microsoft.com/library/azure/70530644-c97a-4ab6-85f7-88bf30a8be5f) module to divide the data into April-September records for training, and October records for validation.
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight15.PNG)
-
-Year and month columns are  removed from the training dataset using the [**Project Columns**](https://msdn.microsoft.com/library/azure/1ec722fa-b623-4e26-a44e-a50c6d726223) module.
-The training data is then separated into equal-height bins using the [**Quantize Data**](https://msdn.microsoft.com/library/azure/61dd433a-ee80-4ac3-87f0-b54708644d93) module, and the same binning method was applied to the validation data.
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight16.PNG)
-
-The training data is split once more, into a training dataset and an optional validation dataset.
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight17.PNG)
-
-## <a name="anchor-3"></a> Define Features
-In machine learning, *features* are individual measurable properties of something you’re interested in. Finding a good set of features for creating a predictive model requires experimentation and knowledge about the problem at hand. Some features are better for predicting the target than others. Also, some features have a strong correlation with other features, so they will not add much new information to the model and can be removed. In order to build a model, we can use all the features available, or we can select a subset of the features in the dataset. Typically you can try selecting different features, and then running the experiment again, to see if you get better results.
-
-The various features are the weather conditions at the arrival and destination airports, departure and arrival times, the airline carrier, the day of month, and the day of the week.
-
-[Step 4: Choose and Apply a Learning Algorithm]:#step-4-choose-and-apply-a-learning-algorithm
-
-## <a name="anchor-4"></a> Choose and apply a learning algorithm.
-
-**Model Training and Validation**
-
-We created a model using the [**Two-Class Boosted Decision Tree**](https://msdn.microsoft.com/library/azure/e3c522f8-53d9-4829-8ea4-5c6a6b75330c) module and trained it using the training dataset.  To determine the optimal parameters, we connected the output port of **Two-Class Boosted Decision Tree**  to the [**Sweep Parameters**](https://msdn.microsoft.com/library/azure/038d91b6-c2f2-42a1-9215-1f2c20ed1b40) module.
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight18b.PNG)
-
-The model is optimized for the best AUC using 10-fold random parameter sweep.
-
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight19.PNG)
-
-For comparison, we created a model using the [**Two-Class Logistic Regression**](https://msdn.microsoft.com/library/azure/b0fd7660-eeed-43c5-9487-20d9cc79ed5d) module, and optimized it in the same manner.
-
-The result of the experiment is a trained classification model that can be used to score new samples to make predictions. We used the validation set to generate scores from the trained models, and then used the [**Evaluate Model**](https://msdn.microsoft.com/library/azure/927d65ac-3b50-4694-9903-20f6c1672089) module to analyze and compare the quality of the models.
-
-<a name="anchor-5"></a>
-##Predict Using New Data
-Now that we've trained the model, we can use it to score the other part of our data (the last month (October) records that were set aside for validation) and to see how well our model predicts and classifies new data.
-
-Add the [**Score Model**](https://msdn.microsoft.com/library/azure/401b4f92-e724-4d5a-be81-d5b0ff9bdb33) module to the experiment canvas, and connect the left input port to the output of the **Train Model** module. Connect the right input port to the validation data (right port) of the [**Split**](https://msdn.microsoft.com/library/azure/70530644-c97a-4ab6-85f7-88bf30a8be5f) module.
-
-After you run the experiment, you can view the output from the **Score Model** module by clicking the output port and selecting **Visualize**. The output includes the scored labels and the probabilities for the labels.
-
-Finally, to test the quality of the results, add the [**Evaluate Model**](https://msdn.microsoft.com/library/azure/927d65ac-3b50-4694-9903-20f6c1672089) module to the experiment canvas, and connect the left input port to the output of the **Score Model** module. Note that there are two input ports for **Evaluate Model**, because the module can be used to compare two models. In this experiment, we compare the performance of the two different algorithms: the one created using **Two-Class Boosted Decision Tree** and the one created using **Two-Class Logistic Regression**.
-Run the experiment and view the output of the **Evaluate Model** module, by clicking the output port and selecting **Visualize**.
+We also compute the Confusion Matrix to describe the performance of the Logistic Regression model on a set of test data for which the true values are known.
+```
+xtab <- table(predictDF$ArrDel15_Class, testDF$ArrDel15)
+(if(!require("e1071")) install.packages("e1071"))
+(if(!require("caret")) install.packages("caret"))
+library(e1071)
+library(caret)
+confusionMatrix(xtab, positive = '1')
+```
+![][image6]
 
 
-##Results
-The boosted decision tree model has AUC of 0.697 on the validation set, which is slightly better than the logistic regression model, with AUC of 0.675.
-![screenshot_of_experiment](https://az712634.vo.msecnd.net/samplesimg/v1/4/flight20.PNG)
+## <a name="anchor-4B"></a> Step 4B: Choose and apply a learning algorithm (Decision Tree)
+
+After building the Logistic Regression model, we are also interested in seeing how a Decision Tree model would perform on this dataset.
+
+First, we build a basic Decision Tree model with all default parameters.
+```
+dTree1 <- rxDTree(form, data = 'finalData.splitVar.Train.xdf')
+```
+
+Then, we want to find the best value of `cp` for pruning a `rxDTree` object. `cp` is a numeric scalar that specifies the complexity parameter. Any split that does not decrease overall lack-of-fit by at least `cp` is not attempted.
+```
+treeCp <- rxDTreeBestCp(dTree1)
+```
+
+Once we have the best value of `cp` that is determined by `rxDTreeBestCp()`, we prune a decision tree created by `rxDTree()` and return the smaller tree.
+```
+dTree2 <- prune.rxDTree(dTree1, cp = treeCp)
+```
 
 
-**Post-Processing**
+## <a name="anchor-5B"></a> Step 5B: Predict over new data (Decision Tree)
 
-To make the results easier to analyze, we used the _airportID_ field to join the dataset that contains the airport names and locations.
+We predict the probability of flight delay on the test dataset using the trained Decision Tree model.
+```
+predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.xdf',
+                         outData = 'dTreeTest.xdf',
+                         overwrite = TRUE)
+```
+
+Again, by setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed).
+```
+predictDF2 <- rxImport('dTreeTest.xdf')
+predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred < 0.5)] <- 0
+predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred >= 0.5)] <- 1
+```
+
+The `AUC` of the Decision Tree model is 0.7284, which is higher than the `AUC` of the Logistic Regression model.
+As we can see in the result, the Logistic Regression model has a AUC of 0.6998.
+```
+auc(testDF$ArrDel15, predictDF2$ArrDel15_Pred)
+```
+
+The Confusion Matrix also shows that the Decision Tree model has a better _Accuracy_ and _Balanced Accuracy_ comparing to the Logistic Regression model when predicting whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes with these datasets.
+```
+xtab2 <- table(predictDF2$ArrDel15_Class, testDF$ArrDel15)
+confusionMatrix(xtab2, positive = '1')
+```
+![][image7]
 
 
+**Microsoft R Server**
+Microsoft R Server is fun to play with and works extrmely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
 
 
 <!-- Images -->
-[image1]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image1.PNG
-[image2]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image2.PNG
-[image3]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image3.PNG
-[image4]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image4.PNG
-[image5]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image5.PNG
-[image6]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image6.PNG
-[image7]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image7.PNG
-[image8]:https://raw.githubusercontent.com/mezmicrosoft/Sample_Experiments/master/Anomaly_Detection_Credit_Risk/image8.PNG
+[image1]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image1.PNG
+[image2]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image2.PNG
+[image3]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image3.PNG
+[image4]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image4.PNG
+[image5]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image5.PNG
+[image6]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image6.PNG
+[image7]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image7.PNG

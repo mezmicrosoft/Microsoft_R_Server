@@ -154,12 +154,12 @@ rxExec(rxSplit, inData = finalData,
 
 #### Step 4A: Choose and apply a learning algorithm (Logistic Regression).
 
-# Build the formula and set parameters.
+# Build the formula.
 allvars <- names(finalData)
 xvars <- allvars[allvars !='ArrDel15']
 form <- as.formula(paste("ArrDel15", "~", paste(xvars, collapse = "+")))  
 
-## Build a Logistic Regression model.
+# Build a Logistic Regression model.
 logitModel <- rxLogit(form, data = 'finalData.splitVar.Train.xdf')
 summary(logitModel)
 
@@ -198,13 +198,13 @@ xtab <- table(predictDF$ArrDel15_Class, testDF$ArrDel15)
 (if(!require("caret")) install.packages("caret"))
 library(e1071)
 library(caret) 
-confusionMatrix(xtab)
+confusionMatrix(xtab, positive = '1')
 
 
 
 #### Step 4B: Choose and apply a learning algorithm (Decision Tree).
 
-## Build a decision tree model.
+# Build a decision tree model.
 dTree1 <- rxDTree(form, data = 'finalData.splitVar.Train.xdf')
 
 # Find the Best Value of cp for Pruning rxDTree Object.
@@ -232,6 +232,6 @@ auc(testDF$ArrDel15, predictDF2$ArrDel15_Pred)
 
 # Compute Confusion matrix.
 xtab2 <- table(predictDF2$ArrDel15_Class, testDF$ArrDel15)
-confusionMatrix(xtab)
+confusionMatrix(xtab2, positive = '1')
 
 
