@@ -6,7 +6,7 @@ We approach this problem as a classification problem, predicting two classes -- 
 
 To solve this categorization problem, we will build an example using Microsoft R Server. In this example, we train a model using a large number of examples from historic flight data, along with an outcome measure that indicates the appropriate category or class for each example. The two classes are labeled 1 if a flight was delayed, and labeled 0 if the flight was on time.
 
-There are five basic steps in building an experiment in Azure ML Studio:
+There are five basic steps in building this example using Microsoft R Server (all the R scripts are available in **RRE_Flight_Delay.R**.):
 
 Prepare the Data
 
@@ -328,8 +328,7 @@ confusionMatrix(xtab2, positive = '1')
 ![][image7]
 
 
-**Microsoft R Server**
-Microsoft R Server is fun to play with and works extrmely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
+**Microsoft R Server** is fun to play with and works extrmely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
 
 
 <!-- Images -->
