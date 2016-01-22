@@ -28,7 +28,7 @@ Score and Test the Model
 
 ## Data
 
-**Flight Delays Data.csv** includes the following 14 columns: _Year_, _Month_, _DayofMonth_, _DayOfWeek_, _Carrier_, _OriginAirportID_, _DestAirportID_, _CRSDepTime_, _DepDelay_, _DepDel15_, _CRSArrTime_, _ArrDelay_, _ArrDel15_, and _Cancelled_.
+**Flight Delays Data.csv** (unzip the _Flight Delays Data.zip_ file) includes the following 14 columns: _Year_, _Month_, _DayofMonth_, _DayOfWeek_, _Carrier_, _OriginAirportID_, _DestAirportID_, _CRSDepTime_, _DepDelay_, _DepDel15_, _CRSArrTime_, _ArrDelay_, _ArrDel15_, and _Cancelled_.
 
 These columns contain the following information:
 - _Carrier_ -	Code assigned by IATA and commonly used to identify a carrier.
