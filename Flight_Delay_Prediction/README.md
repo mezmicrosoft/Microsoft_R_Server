@@ -31,29 +31,29 @@ Score and Test the Model
 **Flight Delays Data.csv** (unzip the _Flight Delays Data.zip_ file) includes the following 14 columns: _Year_, _Month_, _DayofMonth_, _DayOfWeek_, _Carrier_, _OriginAirportID_, _DestAirportID_, _CRSDepTime_, _DepDelay_, _DepDel15_, _CRSArrTime_, _ArrDelay_, _ArrDel15_, and _Cancelled_.
 
 These columns contain the following information:
-- _Carrier_ -	Code assigned by IATA and commonly used to identify a carrier.
-- _OriginAirportID_ - An identification number assigned by US DOT to identify a unique airport (the flight's origin).
-- _DestAirportID_ -	An identification number assigned by US DOT to identify a unique airport (the flight's destination).
-- _CRSDepTime_ - The CRS departure time in local time (hhmm)
-- _DepDelay_ - Difference in minutes between the scheduled and actual departure times. Early departures show negative numbers.
-- _DepDel15_ -	 A Boolean value indicating whether the departure was delayed by 15 minutes or more (1=Departure was delayed)
-- _CRSArrTime_ - CRS arrival time in local time(hhmm)
-- _ArrDelay_ - Difference in minutes between the scheduled and actual arrival times. Early arrivals show negative numbers.
-- _ArrDel15_ - A Boolean value indicating whether the arrival was delayed by 15 minutes or more (1=Arrival was delayed)
-- _Cancelled_ - A Boolean value indicating whether the arrival flight was cancelled  (1=Flight was cancelled)
+- _Carrier_:	Code assigned by IATA and commonly used to identify a carrier.
+- _OriginAirportID_: An identification number assigned by US DOT to identify a unique airport (the flight's origin).
+- _DestAirportID_:	An identification number assigned by US DOT to identify a unique airport (the flight's destination).
+- _CRSDepTime_: The CRS departure time in local time (hhmm)
+- _DepDelay_: Difference in minutes between the scheduled and actual departure times. Early departures show negative numbers.
+- _DepDel15_: A Boolean value indicating whether the departure was delayed by 15 minutes or more (1=Departure was delayed)
+- _CRSArrTime_: CRS arrival time in local time(hhmm)
+- _ArrDelay_: Difference in minutes between the scheduled and actual arrival times. Early arrivals show negative numbers.
+- _ArrDel15_: A Boolean value indicating whether the arrival was delayed by 15 minutes or more (1=Arrival was delayed)
+- _Cancelled_: A Boolean value indicating whether the arrival flight was cancelled  (1=Flight was cancelled)
 
 **Weather Data.csv** includes the following 14 columns: _AirportID_, _Year_, _AdjustedMonth_, _AdjustedDay_, _AdjustedHour_, _TimeZone_, _Visibility_,  _DryBulbFarenheit_, _DryBulbCelsius_, _DewPointFarenheit_, _DewPointCelsius_, _RelativeHumidity_, _WindSpeed_, _Altimeter_
 
 
 ## <a name="anchor-1"></a> Step 1: Import Data
 
-The `RevoScaleR`, comes with Microsoft R Server, provides tools for scalable data management and analysis. It contains a wide range of `rx` prefixed functions that include functionality for:
-1. Accessing external data sets (SAS, SPSS, ODBC, Teradata, and delimited and fixed format text) for analysis in R.
-2. Efficiently storing and retrieving data in a high performance data file.
-3. Cleaning, exploring, and manipulating data.
-4. Fast, basic statistical analyses.
+The `RevoScaleR`, comes with Microsoft R Server (MRS), provides tools for scalable data management and analysis. It contains a wide range of `rx` prefixed functions that include functionality for:
+* Accessing external data sets (SAS, SPSS, ODBC, Teradata, and delimited and fixed format text) for analysis in R.
+* Efficiently storing and retrieving data in a high performance data file.
+* Cleaning, exploring, and manipulating data.
+* Fast, basic statistical analysis.
 
-`rxImport()` can import a comma-delimited text file to a `.xdf` file. The `.xdf` data file format, designed for fast processing of blocks of data. The class of `flight` object is `RxXdfData`.
+`rxImport()` can import a comma-delimited text file to a `.xdf` file. The `.xdf` data file format is designed for fast processing of blocks of data. The class of `flight` object is `RxXdfData`.
 ```
 # Import the flight data.
 flight <- rxImport(inData = inputFileFlight, outFile = outFileFlight,
@@ -65,9 +65,8 @@ weather <- rxImport(inData = inputFileWeather, outFile = outFileWeather,
                     varsToDrop = c('Year', 'Timezone', 'DryBulbFarenheit', 'DewPointFarenheit'),
                     overwrite=TRUE)
 ```
-Open source R functions, such as `dim()`, `head()`, `ncol()`, `nrow()`, can also be applied to `RxXdfData` class objects.
 
-Now, let's examine the imported datasets.
+After importing the data, we want to examine the information that is contained in the source data. MRS gives us the capability to apply the open source R functions, such as `dim()`, `head()`, `ncol()`, `nrow()`, on the `RxXdfData` class objects.
 ```
 dim(flight)  # 2719418 rows * 14 columns.
 head(flight)  # Review the first 6 rows of flight data.
@@ -75,25 +74,25 @@ nrow(weather)  # 404914 rows in weather data.
 ncol(weather)  # 10 columns in weather data.
 ```
 
-We can also get .xdf File Information by using `rxGetInfo()`.
+We can also get `.xdf` File Information by using `rxGetInfo()`.
 ```
 rxGetInfo(flight)
 ```
 ![][image1]
 
-And get variable information of flight data by using `rxGetVarInfo`.
+And get variable information of flight data by using `rxGetVarInfo()`.
 ```
 rxGetVarInfo(flight)
 ```
 ![][image2]
 
-Summary the flight data is easy by using `rxSummary()`.
+Before performing any statistical analysis or predictive modeling, we want to obtain some basic statistics of the data, for example: **Mean**, **Standard Deviation**, **Minimum**, **Maximum**, and etc.  `rxSummary()` can produce univariate summaries of objects in `RevoScaleR`.
 ```
 rxSummary(~., data = flight, blocksPerRead = 2)
 ```
 ![][image3]
 
-The Open Source R `summary()` can also generate a similar data summary.
+If you are familiar with open source R function `summary()`, it can also generate a similar data summary.
 ```
 summary(weather)
 ```
@@ -104,12 +103,12 @@ summary(weather)
 
 A dataset usually requires some pre-processing before it can be analyzed.
 
-First, we remove columns that are possible target leakers from the flight data. `varsToDrop` is a character vector of variable names to exclude when reading from the input data file.
+First, we want to remove some columns that are possible target leakers from the flight data. `varsToDrop` is a character vector of variable names to exclude when reading from the input data file.
 ```
 varsToDrop <- c('DepDelay', 'DepDel15', 'ArrDelay', 'Cancelled', 'Year')
 ```
 
-We also round down scheduled departure time (`CSRDepTime` column in the flight data) to the full hour so that it can be used as a joining key to concatenate with the weather data. `rxDataStep()` can transform data from an input data set to an output data set.
+We also round down scheduled departure time (`CSRDepTime` column in the flight data) to the full hour so that it can be used as a joining key to concatenate with the weather data. `rxDataStep()` is good function to utilize for data manipulation and can transform data from an input data set to an output data set.
 ```
 xform <- function(dataList) {
   # Create a new continuous variable from an existing continuous variables:
@@ -130,6 +129,10 @@ flight <- rxDataStep(inData = flight,
 ```
 
 To prepare the data for the merging later, we rename some column names in the weather data.
+* `AdjustedMonth` is renamed as `Month`.
+* `AdjustedDay` is renamed as `DayofMonth`.
+* `AirportID` is renamed as `OriginAirportID`.
+* `AdjustedHour` is renamed as `CRSDepTime`.
 ```
 xform2 <- function(dataList) {
   # Create a new column 'DestAirportID' in weather data.
@@ -147,9 +150,10 @@ weather <- rxDataStep(inData = weather,
                       transformVars = c('AdjustedMonth', 'AdjustedDay', 'AirportID', 'AdjustedHour'),
                       overwrite=TRUE
                       )
-```            
-Then we can join flight and weather data using keys `Month`, `DayofMonth`, `OriginAirportID`, and `CRSDepTime`. `rxMerge()` can merge variables from two sorted `.xdf` files or data frames on one or more match variables.
-1. Join flight records and weather data at origin of the flight (OriginAirportID).
+```       
+
+Now, we can join the flight and weather data using their common keys `Month`, `DayofMonth`, `OriginAirportID`, and `CRSDepTime`. `rxMerge()` can merge variables from two sorted `.xdf` files or data frames on one or more match variables.
+* Firstly, join flight records and weather data at origin of the flight (_OriginAirportID_).
 ```
 originData <- rxMerge(inData1 = flight, inData2 = weather, outFile = outFileOrigin,
                       type = 'inner', autoSort = TRUE, decreasing = FALSE,
@@ -159,7 +163,7 @@ originData <- rxMerge(inData1 = flight, inData2 = weather, outFile = outFileOrig
                       )
 ```                  
 
-2. Join flight records and weather data using the destination of the flight (DestAirportID).
+* Secondly, join flight records and weather data using the destination of the flight (_DestAirportID_).
 ```
 destData <- rxMerge(inData1 = originData, inData2 = weather, outFile = outFileDest,
                     type = 'inner', autoSort = TRUE, decreasing = FALSE,
@@ -170,7 +174,7 @@ destData <- rxMerge(inData1 = originData, inData2 = weather, outFile = outFileDe
                     )
 ```
 
-Since some numerical features are not standerlized between 0 and 1 scale, we use `scale()` to normalize the column of numeric values. Also, `OriginAirportID` and `DestAirportID` need to be treated as categorical features because each numeric value in those two columns represents different airport.
+Since some numerical features are not standardized between 0 and 1 scale, we use `scale()` to normalize the column of numeric values. Also, `OriginAirportID` and `DestAirportID` need to be treated as categorical features because each numeric value in those two columns represents different airport.
 ```
 finalData <- rxDataStep(inData = destData, outFile = outFileFinal,
                       transforms = list(
@@ -199,7 +203,9 @@ finalData <- rxDataStep(inData = destData, outFile = outFileFinal,
 
 ## <a name="anchor-3"></a> Step 3: Prepare Training and Test Datasets
 
-Before choosing and applying a learning algorithm to predict whether the flight will be delayed by more than 15 minutes, we randomly split 80% data as training set and the remaining 20% as test set. `rxExec()` allows distributed execution of a function in parallel across nodes (computers) or cores of a _compute context_ such as a cluster.
+Before choosing and applying a learning algorithm to predict whether the flight will be delayed by more than 15 minutes, we randomly select 80% from the joined dataset to create a training set and use the residual 20% as the test set to evaluate the model obtained from the training set.
+
+`rxExec()` allows distributed execution of a function in parallel across nodes (computers) or cores of a _compute context_ such as a cluster.
 ```
 rxExec(rxSplit, inData = finalData,
        outFilesBase="finalData",
@@ -216,7 +222,7 @@ rxExec(rxSplit, inData = finalData,
 
 ## <a name="anchor-4A"></a> Step 4A: Choose and apply a learning algorithm (Logistic Regression)
 
-Since this example is a binary classification problem, we decide to use two different classification models to solve this problem and compare their results.
+In order to experience different Machine Learning models via MRS, we decide to implement two models to solve this binary classification problem and compare their results.
 
 The first model we build is a Logistic Regression model using the `rxLogit()` function. Since the formula `dot(.)` expansion is currently not supported, we need to build the formula between `ArrDel15` and other independent variables as below.
 ```
@@ -233,7 +239,7 @@ summary(logitModel)
 
 ## <a name="anchor-5A"></a> Step 5A: Predict over new data (Logistic Regression)
 
-Once we learn the algorithm on the training dataset, we can predict the probability of a flight is going to delay on the test dataset. In the `rxPredict`, we choose `type = 'response'` because the predictions are on the scale of the response variable in the range of (0, 1).
+Once we learn the algorithm on the training dataset, we can predict the probability of a flight is going to be delayed by 15 minutes on the test dataset. In the `rxPredict()`, we choose `type = 'response'` because the predictions are on the scale of the response variable in the range of (0, 1).
 ```
 predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.xdf',
                           outData = 'logitTest.xdf',
@@ -245,7 +251,7 @@ rxGetInfo(predictLogit, getVarInfo = TRUE, numRows = 5)
 ```
 ![][image5]
 
-By setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed).
+By setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed by 15 minutes) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed by 15 minutes).
 ```
 testDF <- rxImport('finalData.splitVar.Test.xdf')
 predictDF <- rxImport('logitTest.xdf')
@@ -253,7 +259,7 @@ predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred < 0.5)] <- 0
 predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred >= 0.5)] <- 1
 ```
 
-In order to evaluate how the model performs, we calculate the `Area Under the Curve (AUC)`. `AUC` is a metric used to judge predictions in binary response (0/1) problem. As we can see in the result, the Logistic Regression model has a AUC of 0.6998.
+In order to evaluate how this model performs, we calculate the `Area Under the Curve (AUC)`. `AUC` is a metric used to judge predictions in binary response (0 vs. 1) problem. As we can see in the result, the Logistic Regression model has a AUC of **0.6998**.
 ```
 auc <- function(outcome, prob){
   N <- length(prob)
@@ -266,7 +272,7 @@ auc <- function(outcome, prob){
 auc(testDF$ArrDel15, predictDF$ArrDel15_Pred)
 ```
 
-We also compute the Confusion Matrix to describe the performance of the Logistic Regression model on a set of test data for which the true values are known.
+We also compute the `Confusion Matrix` to describe the performance of the Logistic Regression model on a set of test data for which the true values are known.
 ```
 xtab <- table(predictDF$ArrDel15_Class, testDF$ArrDel15)
 (if(!require("e1071")) install.packages("e1071"))
@@ -307,20 +313,19 @@ predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.xdf',
                          overwrite = TRUE)
 ```
 
-Again, by setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed).
+Again, by setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed by 15 minutes) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed by 15 minutes).
 ```
 predictDF2 <- rxImport('dTreeTest.xdf')
 predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred < 0.5)] <- 0
 predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred >= 0.5)] <- 1
 ```
 
-The `AUC` of the Decision Tree model is 0.7284, which is higher than the `AUC` of the Logistic Regression model.
-As we can see in the result, the Logistic Regression model has a AUC of 0.6998.
+The `AUC` of the Decision Tree model is **0.7284**, which is higher than the `AUC` of the Logistic Regression model.
 ```
 auc(testDF$ArrDel15, predictDF2$ArrDel15_Pred)
 ```
 
-The Confusion Matrix also shows that the Decision Tree model has a better _Accuracy_ and _Balanced Accuracy_ comparing to the Logistic Regression model when predicting whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes with these datasets.
+The `Confusion Matrix` also shows that the Decision Tree model has a better _Accuracy_ and _Balanced Accuracy_ comparing to the Logistic Regression model when predicting whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes with these datasets.
 ```
 xtab2 <- table(predictDF2$ArrDel15_Class, testDF$ArrDel15)
 confusionMatrix(xtab2, positive = '1')
@@ -328,7 +333,7 @@ confusionMatrix(xtab2, positive = '1')
 ![][image7]
 
 
-**Microsoft R Server** is fun to play with and works extrmely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
+**Microsoft R Server** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
 
 
 <!-- Images -->
