@@ -1,6 +1,5 @@
 # Set up working directory.
 dataDir <- "<Where the 'Flight Delays Data.csv' and 'Weather Data.csv' are stored.>"
-# dataDir <- "C:/Users/mez/OneDrive - Microsoft/Main Projects/RRE/Flight Delay"
 
 # Initial some variables.
 inputFileFlight <- file.path(dataDir, "Flight Delays Data.csv")
