@@ -336,7 +336,7 @@ confusionMatrix(xtab2, positive = '1')
 ![][image7]
 
 
-**RevoScaleR** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give it a try on Microsoft R Server or Microsoft R Open.
+**RevoScaleR** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give it a try on Microsoft R Server.
 
 
 <!-- Images -->
