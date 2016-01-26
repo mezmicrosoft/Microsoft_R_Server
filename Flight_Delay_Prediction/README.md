@@ -1,12 +1,14 @@
-# Flight Delay Prediction using Microsoft R Server (a.k.a. Revolution R Enterprise)
+# Flight Delay Prediction with RevoScaleR (Microsoft R Server)
 
 In this example, we use historical on-time performance and weather data to predict whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes.
 
 We approach this problem as a classification problem, predicting two classes -- whether the flight will be delayed, or whether it will be on time. Broadly speaking, in machine learning and statistics, classification is the task of identifying the class or category to which a new observation belongs, on the basis of a training set of data containing observations with known categories. Classification is generally a supervised learning problem. Since this is a binary classification task, there are only  two classes.
 
-To solve this categorization problem, we will build an example using Microsoft R Server. In this example, we train a model using a large number of examples from historic flight data, along with an outcome measure that indicates the appropriate category or class for each example. The two classes are labeled 1 if a flight was delayed, and labeled 0 if the flight was on time.
+To solve this categorization problem, we build an example using `RevoScaleR` library within Microsoft R Server. The `RevoScaleR` library provides extremely fast statistical analysis on terabyte-class data sets without needing specialized hardware. Also, the `RevoScaleR` platform offers efficient, local data storage, which offers numerous benefits when working with extremely large datasets.
 
-There are five basic steps in building this example using Microsoft R Server (all the R scripts are available in **RRE_Flight_Delay.R**.):
+In this example, we train a model using a large number of examples from historic flight data, along with an outcome measure that indicates the appropriate category or class for each example. The two classes are labeled 1 if a flight was delayed, and labeled 0 if the flight was on time.
+
+There are five basic steps in building this example using Microsoft R Server (all the R scripts are available in **MRS_Flight_Delay.R**.):
 
 Prepare the Data
 
@@ -212,7 +214,7 @@ rxExec(rxSplit, inData = finalData,
        outFileSuffixes=c("Train", "Test"),
        splitByFactor="splitVar",
        overwrite=TRUE,
-       transforms=list(splitVar = factor(sample(c("Train", "Test"), size=.rxNumRows, replace=TRUE, prob=c(.80, .10)),
+       transforms=list(splitVar = factor(sample(c("Train", "Test"), size=.rxNumRows, replace=TRUE, prob=c(.80, .20)),
                        levels= c("Train", "Test"))),
        rngSeed=17,
        consoleOutput=TRUE
@@ -241,8 +243,7 @@ summary(logitModel)
 
 Once we learn the algorithm on the training dataset, we can predict the probability of a flight is going to be delayed by 15 minutes on the test dataset. In the `rxPredict()`, we choose `type = 'response'` because the predictions are on the scale of the response variable in the range of (0, 1).
 ```
-predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.xdf',
-                          outData = 'logitTest.xdf',
+predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.logit.xdf',
                           type = 'response', overwrite = TRUE)
 ```
 Let's take a look of the first 5 rows of the prediction results. The `ArrDel15_Pred` column contains the predictions.
@@ -253,28 +254,25 @@ rxGetInfo(predictLogit, getVarInfo = TRUE, numRows = 5)
 
 By setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed by 15 minutes) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed by 15 minutes).
 ```
-testDF <- rxImport('finalData.splitVar.Test.xdf')
-predictDF <- rxImport('logitTest.xdf')
-predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred < 0.5)] <- 0
-predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred >= 0.5)] <- 1
+testDF <- rxImport('finalData.splitVar.Test.logit.xdf')
+testDF$ArrDel15_Class[which(testDF$ArrDel15_Pred < 0.5)] <- 0
+testDF$ArrDel15_Class[which(testDF$ArrDel15_Pred >= 0.5)] <- 1
 ```
 
-In order to evaluate how this model performs, we calculate the `Area Under the Curve (AUC)`. `AUC` is a metric used to judge predictions in binary response (0 vs. 1) problem. As we can see in the result, the Logistic Regression model has a AUC of **0.6998**.
+Let's take a look of the ROC Curve of Logistic Regression model.
 ```
-auc <- function(outcome, prob){
-  N <- length(prob)
-  N_pos <- sum(outcome)
-  df <- data.frame(out = outcome, prob = prob)
-  df <- df[order(-df$prob),]
-  df$above <- (1:N) - cumsum(df$out)
-  return( 1- sum( df$above * df$out ) / (N_pos * (N-N_pos) ) )
-}
-auc(testDF$ArrDel15, predictDF$ArrDel15_Pred)
+rxRocCurve( "ArrDel15", "ArrDel15_Pred", predictLogit)
+```
+![][roc1]
+
+In order to evaluate how this model performs, we calculate the `Area Under the Curve (AUC)`. `AUC` is a metric used to judge predictions in binary response (0 vs. 1) problem. As we can see in the result, the Logistic Regression model has a AUC of **0.70**.
+```
+rxAuc(rxRoc("ArrDel15", "ArrDel15_Pred", predictLogit))
 ```
 
 We also compute the `Confusion Matrix` to describe the performance of the Logistic Regression model on a set of test data for which the true values are known.
 ```
-xtab <- table(predictDF$ArrDel15_Class, testDF$ArrDel15)
+xtab <- table(testDF$ArrDel15_Class, testDF$ArrDel15)
 (if(!require("e1071")) install.packages("e1071"))
 (if(!require("caret")) install.packages("caret"))
 library(e1071)
@@ -308,32 +306,37 @@ dTree2 <- prune.rxDTree(dTree1, cp = treeCp)
 
 We predict the probability of flight delay on the test dataset using the trained Decision Tree model.
 ```
-predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.xdf',
-                         outData = 'dTreeTest.xdf',
+predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.tree.xdf',
                          overwrite = TRUE)
 ```
 
 Again, by setting 0.5 as the threshold, we can classify all the predictions that are less than 0.5 as 0 (Arrival was not delayed by 15 minutes) and all the predictions that are greater or equal to 0.5 as 1 (Arrival was delayed by 15 minutes).
 ```
-predictDF2 <- rxImport('dTreeTest.xdf')
-predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred < 0.5)] <- 0
-predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred >= 0.5)] <- 1
+testDF2 <- rxImport('finalData.splitVar.Test.tree.xdf')
+testDF2$ArrDel15_Class[which(testDF2$ArrDel15_Pred < 0.5)] <- 0
+testDF2$ArrDel15_Class[which(testDF2$ArrDel15_Pred >= 0.5)] <- 1
 ```
 
-The `AUC` of the Decision Tree model is **0.7284**, which is higher than the `AUC` of the Logistic Regression model.
+Let's take a look of the ROC Curve of Logistic Regression model.
 ```
-auc(testDF$ArrDel15, predictDF2$ArrDel15_Pred)
+rxRocCurve( "ArrDel15", "ArrDel15_Pred", predictTree)
+```
+![][roc2]
+
+The `AUC` of the Decision Tree model is **0.73**, which is higher than the `AUC` of the Logistic Regression model.
+```
+rxAuc(rxRoc("ArrDel15", "ArrDel15_Pred", predictTree))
 ```
 
 The `Confusion Matrix` also shows that the Decision Tree model has a better _Accuracy_ and _Balanced Accuracy_ comparing to the Logistic Regression model when predicting whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes with these datasets.
 ```
-xtab2 <- table(predictDF2$ArrDel15_Class, testDF$ArrDel15)
+xtab2 <- table(testDF2$ArrDel15_Class, testDF2$ArrDel15)
 confusionMatrix(xtab2, positive = '1')
 ```
 ![][image7]
 
 
-**Microsoft R Server** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give a try on Microsoft R Server.
+**RevoScaleR** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give it a try on Microsoft R Server or Microsoft R Open.
 
 
 <!-- Images -->
@@ -344,3 +347,5 @@ confusionMatrix(xtab2, positive = '1')
 [image5]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image5.PNG
 [image6]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image6.PNG
 [image7]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/image7.PNG
+[roc1]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/roc1.PNG
+[roc2]:https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Flight_Delay_Prediction/roc2.PNG

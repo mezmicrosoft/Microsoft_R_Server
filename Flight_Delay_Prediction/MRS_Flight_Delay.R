@@ -1,10 +1,12 @@
 # Set up working directory.
 dataDir <- "<Where the 'Flight Delays Data.csv' and 'Weather Data.csv' are stored.>"
+# dataDir <- "C:/Users/mez/OneDrive - Microsoft/Main Projects/RRE/Flight Delay"
 
 # Initial some variables.
 inputFileFlight <- file.path(dataDir, "Flight Delays Data.csv")
 inputFileWeather <- file.path(dataDir, "Weather Data.csv")
 outFileFlight <- 'flight.xdf'
+outFileFlight2 <- 'flight2.xdf'
 outFileWeather <- 'weather.xdf'
 outFileWeather2 <- 'weather2.xdf'
 outFileOrigin <- 'originData.xdf'
@@ -66,12 +68,12 @@ xform <- function(dataList) {
   return(dataList)
 }
 flight <- rxDataStep(inData = flight, 
-                           outFile = outFileFlightS2,
-                           varsToDrop = varsToDrop,
-                           transformFunc = xform, 
-                           transformVars = 'CRSDepTime',
-                           overwrite=TRUE
-                           )
+                     outFile = outFileFlight2,
+                     varsToDrop = varsToDrop,
+                     transformFunc = xform, 
+                     transformVars = 'CRSDepTime',
+                     overwrite=TRUE
+                     )
 
 # Rename some column names in the weather data to prepare it for merging.
 xform2 <- function(dataList) {
@@ -143,11 +145,15 @@ rxExec(rxSplit, inData = finalData,
        outFileSuffixes=c("Train", "Test"),
        splitByFactor="splitVar",
        overwrite=TRUE,
-       transforms=list(splitVar = factor(sample(c("Train", "Test"), size=.rxNumRows, replace=TRUE, prob=c(.80, .10)),
+       transforms=list(splitVar = factor(sample(c("Train", "Test"), size=.rxNumRows, replace=TRUE, prob=c(.80, .20)),
                        levels= c("Train", "Test"))), 
        rngSeed=17, 
        consoleOutput=TRUE
        )
+
+# Duplicate the test file for two models.
+file.rename('finalData.splitVar.Test.xdf', 'finalData.splitVar.Test.logit.xdf')
+file.copy('finalData.splitVar.Test.logit.xdf', 'finalData.splitVar.Test.tree.xdf')
 
 
 
@@ -167,32 +173,25 @@ summary(logitModel)
 #### Step 5A: Predict over new data (Logistic Regression).
 
 # Predict the probability on the test dataset.
-predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.xdf', 
-                          outData = 'logitTest.xdf',
+predictLogit <- rxPredict(logitModel, data = 'finalData.splitVar.Test.logit.xdf', 
                           type = 'response', overwrite = TRUE)
 
 # Show the first 5 rows of the prediction results.
 rxGetInfo(predictLogit, getVarInfo = TRUE, numRows = 5)  # ArrDel15_Pred
 
 # Set 0.5 as the threshold.
-testDF <- rxImport('finalData.splitVar.Test.xdf')
-predictDF <- rxImport('logitTest.xdf')
-predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred < 0.5)] <- 0
-predictDF$ArrDel15_Class[which(predictDF$ArrDel15_Pred >= 0.5)] <- 1
+testDF <- rxImport('finalData.splitVar.Test.logit.xdf')
+testDF$ArrDel15_Class[which(testDF$ArrDel15_Pred < 0.5)] <- 0
+testDF$ArrDel15_Class[which(testDF$ArrDel15_Pred >= 0.5)] <- 1
+
+# Plot ROC Curve.
+rxRocCurve( "ArrDel15", "ArrDel15_Pred", predictLogit)
 
 # Calculate Area Under the Curve (AUC).
-auc <- function(outcome, prob){
-  N <- length(prob)
-  N_pos <- sum(outcome)
-  df <- data.frame(out = outcome, prob = prob)
-  df <- df[order(-df$prob),]
-  df$above <- (1:N) - cumsum(df$out)
-  return( 1- sum( df$above * df$out ) / (N_pos * (N-N_pos) ) )
-}
-auc(testDF$ArrDel15, predictDF$ArrDel15_Pred)
+rxAuc(rxRoc("ArrDel15", "ArrDel15_Pred", predictLogit))
 
 # Compute Confusion matrix.
-xtab <- table(predictDF$ArrDel15_Class, testDF$ArrDel15)
+xtab <- table(testDF$ArrDel15_Class, testDF$ArrDel15)
 (if(!require("e1071")) install.packages("e1071"))
 (if(!require("caret")) install.packages("caret"))
 library(e1071)
@@ -217,20 +216,22 @@ dTree2 <- prune.rxDTree(dTree1, cp = treeCp)
 #### Step 5B: Predict over new data (Decision Tree).
 
 # Predict the probability on the test dataset.
-predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.xdf', 
-                         outData = 'dTreeTest.xdf',
+predictTree <- rxPredict(dTree2, data = 'finalData.splitVar.Test.tree.xdf', 
                          overwrite = TRUE)
 
 # Set 0.5 as the threshold.
-predictDF2 <- rxImport('dTreeTest.xdf')
-predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred < 0.5)] <- 0
-predictDF2$ArrDel15_Class[which(predictDF2$ArrDel15_Pred >= 0.5)] <- 1
+testDF2 <- rxImport('finalData.splitVar.Test.tree.xdf')
+testDF2$ArrDel15_Class[which(testDF2$ArrDel15_Pred < 0.5)] <- 0
+testDF2$ArrDel15_Class[which(testDF2$ArrDel15_Pred >= 0.5)] <- 1
+
+# Plot ROC Curve.
+rxRocCurve( "ArrDel15", "ArrDel15_Pred", predictTree)
 
 # Calculate Area Under the Curve (AUC).
-auc(testDF$ArrDel15, predictDF2$ArrDel15_Pred)
+rxAuc(rxRoc("ArrDel15", "ArrDel15_Pred", predictTree))
 
 # Compute Confusion matrix.
-xtab2 <- table(predictDF2$ArrDel15_Class, testDF$ArrDel15)
+xtab2 <- table(testDF2$ArrDel15_Class, testDF2$ArrDel15)
 confusionMatrix(xtab2, positive = '1')
 
 
