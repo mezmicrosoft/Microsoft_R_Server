@@ -1,4 +1,4 @@
-# Flight Delay Prediction with RevoScaleR (Microsoft R Server)
+# Flight Delay Prediction with Microsoft R Server
 
 In this example, we use historical on-time performance and weather data to predict whether the arrival of a scheduled passenger flight will be delayed by more than 15 minutes.
 
@@ -335,8 +335,6 @@ confusionMatrix(xtab2, positive = '1')
 ```
 ![][image7]
 
-
-**RevoScaleR** is fun to play with and works extremely well with large-scale datasets. When you're looking for a solution to deal with over million of records, you can definitely give it a try on Microsoft R Server.
 
 
 <!-- Images -->
