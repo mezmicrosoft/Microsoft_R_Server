@@ -6,9 +6,9 @@ In the previous example, we use historical on-time performance and weather data 
 
 Before starting the comparison, here are some System Configuration Information:
 - Operating System: Windows
-- Processor:
-- Installed Memory (RAM):
-- System Type:
+- System Type: 64-bit
+- Cores: 4
+- Installed Memory (RAM): 32.0 GB
 
 In this example, we build a step-by-step comparison on the five steps in _Flight Delay Prediction with Microsoft R Server_ example:
 - [Step 1: Import Data](#anchor-1)
@@ -20,24 +20,26 @@ In this example, we build a step-by-step comparison on the five steps in _Flight
 - [Step 5B: Predict over new data (Decision Tree)](#anchor-5B)
 
 Also, we compare the model accuracies for both Logistic Regression and Decision Tree models by using the `Area Under the Curve (AUC)` as the measure.
-- [Model accuracies comparison](#anchor-6)
+- [Model Accuracies Comparison](#anchor-6)
 
 Data and R Scripts we will use in this example:
-- **Flight Delays Data.csv** (unzip the _Flight Delays Data.zip_ file).
-- **Weather Data.csv**.
-- **MRS_flight_delays.R**.
-- **R_flight_delays.R**.
+- **Flight Delays Data.csv** (unzip the **Flight Delays Data.zip** file)
+- **Weather Data.csv**
+- **MRS_flight_delays.R**
+- **R_flight_delays.R**
 
 Objective conclusions will be made purely based on the performance and model accuracies comparison as below.
 - [Conclusions](#anchor-7)
 
+
 ------------------------------------------
+
 ## <a name="anchor-1"></a> Step 1: Import Data
 
 Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
 ------------- | ------------- | -------------
-Import Flight Data (2719418*14) | 10.86 | 15.60
-Import the weather dataset and eliminate some features (404914*10) | 2.33 | 1.79
+Import Flight Data (2,719,418*14) | 10.86 | 15.60
+Import the weather dataset and eliminate some features (404,914*10) | 2.33 | 1.79
 
 ```
 ### MRS:
@@ -415,6 +417,42 @@ By using those two `cp` values to prune the trees, the Decision Tree models have
 
 
 ## <a name="anchor-7"></a> Conclusions
+
+Since the model accuracies are the same in both MRS and open source R, we want to compare the overall and step-by-step system time used in MRS and R.
+
+
+Total System Time Used in MRS (in seconds) | Total System Time Used in R (in seconds) | Increase/Decrease MRS over R (in percentage)
+------------- | ------------- | -------------
+261.49 | 747.82 | 65.03%
+
+
+Steps | Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds) | Difference: MRS - R (in seconds)
+------------- | ------------- | ------------- | ------------- | -------------
+Step 1: Import Data | Import Flight Data (2,719,418*14) | 10.86 | 15.6 | -4.74
+  | Import the weather dataset and eliminate some features (404,914*10) | 2.33 | 1.79 | 0.54
+Step 2: Pre-process Data | Remove target leakers from flight data and round down scheduled departure time to full hour | 4.75 | 0.03 | 4.72
+  | Rename some column names from weather data to prepare it for merging | 0.34 | 0.01 | 0.33
+  | Join flight records and weather data at OriginAirportID | 28.44 | 43.92 | -15.48
+  | Join flight records and weather data at DestAirportID | 36.25 | 37.53 | -1.28
+  | Normalize some numerical features and convert some features to be categorical | 10.39 | 39.98 | -29.59
+Step 3: Prepare Training and Test Datasets | Randomly select 80/20 as training/test | 9.19 | 0.04 | 9.15
+Step 4A: Choose and apply a learning algorithm (Logistic Regression) | Build a Logistic Regression model | 5.5 | 229.32 | -223.82
+Step 5A: Predict over new data (Logistic Regression) | Predict the probability on the test dataset | 0.56 | 1.72 | -1.16
+Step 4B: Choose and apply a learning algorithm (Decision Tree) | Build a decision tree model | 151.69 | 360.10 | -208.41
+  | Prune a decision tree to return the smaller tree | 0.03 | 4.25 | -4.22
+Step 5B: Predict over new data (Decision Tree) | Predict the probability on the test dataset | 1.16 | 13.53 | -12.37
+
+
+Based on the above overall and step-by-step comparisons, we conclude the Pros and Cons of Microsoft R Server as below:
+
+Pros:
+1. Microsoft R Server
+2.
+3.
+4.
+
+Cons:
+
 
 
 <!-- Links -->
