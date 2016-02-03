@@ -378,7 +378,7 @@ system.time(predictTree_r <- predict(dTree2_r, newdata = test, type = 'prob'))  
 ```
 
 
-## <a name="anchor-6"></a> Model accuracies comparison
+## <a name="anchor-6"></a> Model Accuracies Comparison
 
 The Logistic Regression models have a `AUC` of **0.70** in both MRS and open source R.
 
