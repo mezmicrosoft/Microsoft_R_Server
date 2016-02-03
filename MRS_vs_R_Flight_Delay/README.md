@@ -443,15 +443,14 @@ Step 4B: Choose and apply a learning algorithm (Decision Tree) | Build a decisio
 Step 5B: Predict over new data (Decision Tree) | Predict the probability on the test dataset | 1.16 | 13.53 | -12.37
 
 
-Based on the above overall and step-by-step comparisons, we conclude the Pros and Cons of Microsoft R Server as below:
+Based on the above overall and step-by-step comparisons, we reach the below conclusions:
 
-Pros:
-1. Microsoft R Server
-2.
-3.
+1. Overall, Microsoft R Server uses much less system time (**261.49 seconds**) comparing to open source R (747.82 seconds).  This leads to a **65.03%** improvement in terms of the performance.
+2. Microsoft R Server has a better performance importing large-scale datasets comparing to open source R. The large-scale datasets can be considered as over millions-level records. For the thousands-level dataset, Microsoft R Server seems to have the similar performance with the open source R.
+3. Microsoft R Server saves a lot of time in the data pre-processing stage, especially when concatenating two large datasets and performing complex data manipulations.
 4.
-
-Cons:
+5. Microsoft R Server uses a bit more time when randomly splitting data into training and test datasets. But since it's writing datasets into external `.xdf` files at the same time and open source R doesn't have this intermediate step, the little time difference is acceptable.
+6. Microsoft R Server works extremely well when learning algorithms and predicting over the new data. For both Logistic Regression and Decision Tree models, Microsoft R Server saves a significant amount of system time in these two steps comparing to open source R. Also, learning algorithms and predicting outcomes overall cost the largest amount of time, so the significant time savings truly improve the total performance.
 
 
 
