@@ -9,6 +9,7 @@ Before starting the comparison, here are some System Configuration Information:
 - System Type: 64-bit
 - Cores: 4
 - Installed Memory (RAM): 32.0 GB
+- Microsoft R Server Version: 8.0.0
 
 In this example, we build a step-by-step comparison on the five steps in _Flight Delay Prediction with Microsoft R Server_ example:
 - [Step 1: Import Data](#anchor-1)
