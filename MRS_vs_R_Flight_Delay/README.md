@@ -331,8 +331,8 @@ system.time(predictLogit_r <- predict(logitModel_r, newdata = test, type = 'resp
 
 Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
-Build a decision tree model | 151.69 | 360.10
-Prune a decision tree to return the smaller tree | 0.03 | 4.25
+Build a Decision Tree model | 151.69 | 360.10
+Prune a Decision Tree to return the smaller tree | 0.03 | 4.25
 
 ```
 ### MRS:
@@ -439,7 +439,7 @@ Step 2: Pre-process Data | Remove target leakers from flight data and round down
 Step 3: Prepare Training and Test Datasets | Randomly select 80/20 as training/test | 9.19 | 0.04 | 9.15
 Step 4A: Choose and apply a learning algorithm (Logistic Regression) | Build a Logistic Regression model | 5.5 | 229.32 | -223.82
 Step 5A: Predict over new data (Logistic Regression) | Predict the probability on the test dataset | 0.56 | 1.72 | -1.16
-Step 4B: Choose and apply a learning algorithm (Decision Tree) | Build a decision tree model | 151.69 | 360.10 | -208.41
+Step 4B: Choose and apply a learning algorithm (Decision Tree) | Build a Decision Tree model | 151.69 | 360.10 | -208.41
   | Prune a decision tree to return the smaller tree | 0.03 | 4.25 | -4.22
 Step 5B: Predict over new data (Decision Tree) | Predict the probability on the test dataset | 1.16 | 13.53 | -12.37
 
