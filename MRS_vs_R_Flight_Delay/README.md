@@ -37,7 +37,7 @@ Objective conclusions will be made purely based on the performance and model acc
 
 ## <a name="anchor-1"></a> Step 1: Import Data
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Import Flight Data (2,719,418*14) | 10.86 | 15.60
 Import the weather dataset and eliminate some features (404,914*10) | 2.33 | 1.79
@@ -75,7 +75,7 @@ system.time(weather_r <- subset(read.csv(file = inputFileWeather, na.strings = "
 
 ## <a name="anchor-2"></a> Step 2: Pre-process Data
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Remove target leakers from flight data and round down scheduled departure time to full hour | 4.75 | 0.03
 Rename some column names from weather data to prepare it for merging | 0.34 | <0.01
@@ -259,7 +259,7 @@ system.time(finalData_r <- xform3_r(destData_r))  # elapsed: 39.98 seconds
 
 ## <a name="anchor-3"></a> Step 3: Prepare Training and Test Datasets
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Randomly select 80/20 as training/test | 9.19 | 0.04
 
@@ -289,7 +289,7 @@ system.time(sub <- sample(nrow(finalData_r), floor(nrow(finalData_r) * 0.8)))  #
 
 ## <a name="anchor-4A"></a> Step 4A: Choose and apply a learning algorithm (Logistic Regression)
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Build a Logistic Regression model | 5.50 | 229.32
 
@@ -308,7 +308,7 @@ system.time(logitModel_r <- glm(form, data = train, family = "binomial"))  # ela
 
 ## <a name="anchor-5A"></a> Step 5A: Predict over new data (Logistic Regression)
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Predict the probability on the test dataset | 0.56 | 1.72
 
@@ -329,7 +329,7 @@ system.time(predictLogit_r <- predict(logitModel_r, newdata = test, type = 'resp
 
 ## <a name="anchor-4B"></a> Step 4B: Choose and apply a learning algorithm (Decision Tree)
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Build a decision tree model | 151.69 | 360.10
 Prune a decision tree to return the smaller tree | 0.03 | 4.25
@@ -360,7 +360,7 @@ system.time(dTree2_r <- prune(dTree1_r, cp = treeCp_r))   # elapsed: 4.25 second
 
 ## <a name="anchor-5B"></a> Step 5B: Predict over new data (Decision Tree)
 
-Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds)
+Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds)
 ------------- | ------------- | -------------
 Predict the probability on the test dataset | 1.16 | 13.53
 
@@ -419,15 +419,15 @@ By using those two `cp` values to prune the trees, the Decision Tree models have
 
 ## <a name="anchor-7"></a> Conclusions
 
-Since the model accuracies are the same in both MRS and open source R, we want to compare the overall and step-by-step system time used in MRS and R.
+Since the model accuracies are the same in both MRS and open source R, we want to compare the overall and step-by-step execution time in MRS and R.
 
 
-Total System Time Used in MRS (in seconds) | Total System Time Used in R (in seconds) | Increase/Decrease MRS over R (in percentage)
+Total Execution Time in MRS (in seconds) | Total Execution Time in R (in seconds) | Increase/Decrease MRS over R (in percentage)
 ------------- | ------------- | -------------
 261.49 | 747.82 | 65.03%
 
 
-Steps | Sub-step Names | System Time Used in MRS (in seconds) | System Time Used in R (in seconds) | Difference: MRS - R (in seconds)
+Steps | Sub-step Names | Execution Time in MRS (in seconds) | Execution Time in R (in seconds) | Difference: MRS - R (in seconds)
 ------------- | ------------- | ------------- | ------------- | -------------
 Step 1: Import Data | Import Flight Data (2,719,418*14) | 10.86 | 15.6 | -4.74
   | Import the weather dataset and eliminate some features (404,914*10) | 2.33 | 1.79 | 0.54
@@ -446,12 +446,12 @@ Step 5B: Predict over new data (Decision Tree) | Predict the probability on the 
 
 **Based on the above overall and step-by-step comparisons, we reach the below conclusions:**
 
-1. Overall, Microsoft R Server uses much less system time (**261.49 seconds**) comparing to open source R (747.82 seconds).  This leads to a **65.03%** improvement in terms of the performance.
+1. Overall, Microsoft R Server uses much less execution time (**261.49 seconds**) comparing to open source R (747.82 seconds).  This leads to a **65.03%** improvement in terms of the performance.
 2. Microsoft R Server has a better performance importing large-scale datasets comparing to open source R. The large-scale datasets can be considered as over millions-level records. For the thousands-level dataset, Microsoft R Server seems to have the similar performance with the open source R.
 3. Microsoft R Server saves a lot of time in the data pre-processing stage, especially when concatenating two large datasets and performing complex data manipulations.
 4.
 5. Microsoft R Server uses a bit more time when randomly splitting data into training and test datasets. But since it's writing datasets into external `.xdf` files at the same time and open source R doesn't have this intermediate step, the little time difference is acceptable.
-6. Microsoft R Server works extremely well when learning algorithms and predicting over the new data. For both Logistic Regression and Decision Tree models, Microsoft R Server saves a significant amount of system time in these two steps comparing to open source R. Also, learning algorithms and predicting outcomes overall cost the largest amount of time, so the significant time savings truly improve the total performance.
+6. Microsoft R Server works extremely well when learning algorithms and predicting over the new data. For both Logistic Regression and Decision Tree models, Microsoft R Server saves a significant amount of execution time in these two steps comparing to open source R. Also, learning algorithms and predicting outcomes overall cost the largest amount of time, so the significant time savings truly improve the total performance.
 
 
 
