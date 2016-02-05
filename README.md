@@ -1,2 +1,2 @@
-# Microsoft R Server (a.k.a. Revolution R Enterprise) Examples
-This is a repository to store source files of the examples developed using Microsoft R Server.
+# Microsoft R Server Samples
+This is a repository to showcase samples developed using Microsoft R Server.
