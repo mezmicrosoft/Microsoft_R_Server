@@ -52,7 +52,7 @@ if (!require("RevoScaleR")) {
 }
 
 # Initialize some variables.
-github <- "https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Bike%20Rental%20Estimation/data/"
+github <- "https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Bike_Rental_Estimation/data/"
 inputeFileData <- paste0(github, "date_info.csv")
 inputFileBike <- paste0(github, "Bike_Rental_UCI_Dataset.csv")
 
