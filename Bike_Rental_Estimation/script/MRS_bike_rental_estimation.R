@@ -129,7 +129,7 @@ xform <- function(dataList) {
   return(dataList)
 }
 
-# Use rxDataStep to replace missings with the lastest non-missing observations.
+# Use rxDataStep to replace missings with the latest non-missing observations.
 cleanXdf <- rxDataStep(inData = mergeXdf, outFile = outFileClean, overwrite = TRUE,
                        # Apply the "last observation carried forward" operation.
                        transformFunc = xform,  
