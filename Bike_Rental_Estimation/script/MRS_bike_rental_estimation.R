@@ -51,11 +51,16 @@ if (!require("RevoScaleR")) {
   quit()
 }
 
+# Install the "zoo" package if it's not already installed.
+(if (!require("zoo", quietly = TRUE)) install.packages("zoo"))
+
+# Load package.
+library("zoo", quietly = TRUE)
+
 # Initialize some variables.
 github <- "https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Bike_Rental_Estimation/data/"
 inputeFileData <- paste0(github, "date_info.csv")
 inputFileBike <- paste0(github, "Bike_Rental_UCI_Dataset.csv")
-
 
 # Create a temporary directory to store the intermediate .xdf files.
 td <- tempdir()
@@ -67,10 +72,12 @@ outFileLag <- paste0(td, "/lagData.xdf")
 
 
 ### Step 1: Import and Clean Data
+
 # Import date information (dteday, season, yr, mnth, hr, holiday, weekday, workingday)
 dateXdf <- rxImport(inData = inputeFileData,
                     outFile = outFileDate, overwrite = TRUE,
                     missingValueString = "M", stringsAsFactors = FALSE,
+                    # Define categorical features.
                     colInfo = list(season = list(type = "factor"),
                                    yr = list(type = "factor"),
                                    mnth = list(type = "factor"),
@@ -78,6 +85,8 @@ dateXdf <- rxImport(inData = inputeFileData,
                                    holiday = list(type = "factor"),
                                    weekday = list(type = "factor"),
                                    workingday = list(type = "factor")),
+                    # Convert "dteday" feature from strings to dates.
+                    # Extract "day" from the "dteday" feature.
                     transforms = list(dteday = as.Date(dteday, format="%m/%d/%Y"),
                                       day = as.numeric(format(dteday, "%d"))))
 
@@ -85,9 +94,11 @@ dateXdf <- rxImport(inData = inputeFileData,
 bikeXdf <- rxImport(inData = inputFileBike,
                     outFile = outFileBike, overwrite = TRUE,
                     missingValueString = "M", stringsAsFactors = FALSE,
+                    # Drop some non-useful features.
                     varsToDrop = c("instant", 
                                    "casual", 
                                    "registered"),
+                    # Define categorical features.
                     colInfo = list(season = list(type = "factor"),
                                    yr = list(type = "factor"),
                                    mnth = list(type = "factor"),
@@ -96,35 +107,35 @@ bikeXdf <- rxImport(inData = inputFileBike,
                                    weekday = list(type = "factor"),
                                    workingday = list(type = "factor"),
                                    weathersit = list(type = "factor")),
+                    # Convert "dteday" feature from strings to dates.
                     transforms = list(dteday = as.Date(dteday, format="%m/%d/%Y")))
 
 # Left outer join date information and bike rental data.
 mergeXdf <- rxMerge(inData1 = dateXdf, inData2 = bikeXdf, outFile = outFileMerge,
-                    type = "left", autoSort = TRUE, decreasing = FALSE, matchVars = c("dteday", "hr"),
+                    type = "left", autoSort = TRUE, decreasing = FALSE, 
+                    # Joining key: "dteday", "hr"
+                    matchVars = c("dteday", "hr"),
+                    # Drop some duplicate features in the right table.
                     varsToDrop2 = c("season", "yr", "mnth", "holiday", "weekday", "workingday"),
                     overwrite = TRUE)
 
-# Calculate mean values of numeric features.
-sumStats <- rxResultsDF(rxSummary(~., mergeXdf))
-meanVals <- sumStats$Mean
-names(meanVals) <- row.names(sumStats)
+# Define the tranformation function for the rxDataStep. 
+xform <- function(dataList) {
+  # Identify the features with missing values.
+  featureNames <- c("weathersit", "temp", "atemp", "hum", "windspeed", "cnt")
+  # Use "na.locf" function to carry forward last observation.
+  dataList[featureNames] <- lapply(dataList[featureNames], zoo::na.locf)
+  # Return the data list.
+  return(dataList)
+}
 
-# Calulate the mode of categorical features.
-countStats <- rxCrossTabs(~weathersit, mergeXdf)
-countVals <- countStats$counts$weathersit
-modeVals <- as.numeric(names(countVals[1]))
-
-# Use rxDataStep to replace missings in numeric features with imputed mean values
-# and replace missings in categorical features with 
+# Use rxDataStep to replace missings with the lastest non-missing observations.
 cleanXdf <- rxDataStep(inData = mergeXdf, outFile = outFileClean, overwrite = TRUE,
-                       transforms = list(temp = ifelse(is.na(temp), meanVals["temp"], temp),
-                                         atemp = ifelse(is.na(atemp), meanVals["atemp"], atemp),
-                                         hum = ifelse(is.na(hum), meanVals["hum"], hum),
-                                         windspeed = ifelse(is.na(windspeed), meanVals["windspeed"], windspeed),
-                                         cnt = ifelse(is.na(cnt), round(meanVals["cnt"]), cnt),
-                                         weathersit = factor(ifelse(is.na(weathersit), modeVals, weathersit))),
-                       transformObjects = list(meanVals = meanVals,
-                                               modeVals = modeVals),
+                       # Apply the "last observation carried forward" operation.
+                       transformFunc = xform,  
+                       # Identify the features to apply the tranformation. 
+                       transformVars = c("weathersit", "temp", "atemp", "hum", "windspeed", "cnt"),
+                       # Drop the "dteday" feature. 
                        varsToDrop = "dteday")
 
 
@@ -196,6 +207,7 @@ test <- RxXdfData(paste0(td, "/modelData.yr.1.xdf"))
 
 ### Step 4: Choose and apply a learning algorithm (Decision Forest Regression)
 
+# Define the hourly lags. 
 newHourFeatures <- paste("cnt_", seq(12), "hour", sep = "")
 
 # Set A = weather + holiday + weekday + weekend features for the predicted day.
@@ -249,14 +261,14 @@ rxPredict(dForestB, data = test,
 # Root Mean Squared Error (RMSE), and 
 # Relative Absolute Error (RAE).
 sum <- rxSummary(~ cnt_Resid_A_abs + cnt_Resid_A_2 + cnt_rel_A +
-                    cnt_Resid_B_abs + cnt_Resid_B_2 + cnt_rel_B,
-                  data = test, summaryStats = "Mean", 
-                  transforms = list(cnt_Resid_A_abs = abs(cnt_Resid_A), 
-                                    cnt_Resid_A_2 = cnt_Resid_A^2, 
-                                    cnt_rel_A = abs(cnt_Resid_A)/cnt,
-                                    cnt_Resid_B_abs = abs(cnt_Resid_B), 
-                                    cnt_Resid_B_2 = cnt_Resid_B^2, 
-                                    cnt_rel_B = abs(cnt_Resid_B)/cnt)
+                   cnt_Resid_B_abs + cnt_Resid_B_2 + cnt_rel_B,
+                 data = test, summaryStats = "Mean", 
+                 transforms = list(cnt_Resid_A_abs = abs(cnt_Resid_A), 
+                                   cnt_Resid_A_2 = cnt_Resid_A^2, 
+                                   cnt_rel_A = abs(cnt_Resid_A)/cnt,
+                                   cnt_Resid_B_abs = abs(cnt_Resid_B), 
+                                   cnt_Resid_B_2 = cnt_Resid_B^2, 
+                                   cnt_rel_B = abs(cnt_Resid_B)/cnt)
 )$sDataFrame
 
 # Add row names.
