@@ -15,8 +15,8 @@
 # ranging from 1 to 977, representing the number
 # of bike rentals within a specific hour.
 
-# We built four models using the same algorithm, 
-# but with four different training datasets. The two training 
+# We built two models using the same algorithm, 
+# but with two different training datasets. The two training 
 # datasets that we constructed were all based 
 # on the same raw input data, but we added different additional 
 # features to each training set.
@@ -229,8 +229,8 @@ dForestB <- rxDForest(formB, data = train,
                       method = "anova", maxDepth = 10, nTree = 20,
                       importance = TRUE, seed = 123)
 
-# Plot four dotchart of the variable importance as measured by 
-# the four decision forest models.
+# Plot two dotchart of the variable importance as measured by 
+# the two decision forest models.
 par(mfrow = c(1, 2))
 rxVarImpPlot(dForestA, main = "Variable Importance of Set A")
 rxVarImpPlot(dForestB, main = "Variable Importance of Set B")
@@ -283,3 +283,72 @@ measures <- data.frame(Features = features,
 
 # Review the measures.
 measures
+
+# Split training data into train and test for sweeping parameters
+rxSplit(inData = train,
+        outFilesBase = paste0(td, "/sweepData"),
+        outFileSuffixes = c("Train", "Test"),
+        splitByFactor = "splitVar",
+        overwrite = TRUE,
+        transforms = list(
+          splitVar = factor(sample(c("Train", "Test"),
+                                   size = .rxNumRows,
+                                   replace = TRUE,
+                                   prob = c(.80, .20)),
+                            levels = c("Train", "Test"))),
+        rngSeed = 17,
+        consoleOutput = TRUE)
+
+sweepTrain <- RxXdfData(paste0(td, "/sweepData.splitVar.Train.xdf"))
+sweepTest <- RxXdfData(paste0(td, "/sweepData.splitVar.Test.xdf"))
+
+
+#list of parameters to sweep through
+#numTreesToSweep <- seq(10,20,10)
+#maxDepthToSweep <- seq(5,10,5)
+numTreesToSweep <- rep(seq(10,100,10),10)
+maxDepthToSweep <- rep(seq(5,50,5),each=10)
+
+#switch to local parallel compute context to sweep through parameters in parallel
+rxSetComputeContext(RxLocalParallel())
+
+#Sweep and select the optimal parameters for feature set A
+sweepParamsResults_A <- rxExec(TrainTestDForestfunction, sweepTrain, sweepTest,formA,rxElemArg(numTreesToSweep),rxElemArg(maxDepthToSweep))
+sweepParamsResults_A <- t(data.frame(sweepParamsResults_A))
+colnames(sweepParamsResults_A) <- c('numTrees','maxDepth','RMSE')
+rownames(sweepParamsResults_A) <- seq(1,nrow(sweepParamsResults_A),1)
+minRMSE_index_A = which.min(sweepParamsResults_A[,"RMSE"])[[1]]
+numTrees_optimal_A = sweepParamsResults_A[minRMSE_index_A,"numTrees"]
+maxDepth_optimal_A = sweepParamsResults_A[minRMSE_index_A,"maxDepth"]
+
+#Sweep and select the optimal parameters for feature set B
+sweepParamsResults_B <- rxExec(TrainTestDForestfunction, sweepTrain, sweepTest,formB,rxElemArg(numTreesToSweep),rxElemArg(maxDepthToSweep))
+sweepParamsResults_B <- t(data.frame(sweepParamsResults_B))
+colnames(sweepParamsResults_B) <- c('numTrees','maxDepth','RMSE')
+rownames(sweepParamsResults_B) <- seq(1,nrow(sweepParamsResults_B),1)
+minRMSE_index_B = which.min(sweepParamsResults_B[,"RMSE"])[[1]]
+numTrees_optimal_B = sweepParamsResults_B[minRMSE_index_B,"numTrees"]
+maxDepth_optimal_B = sweepParamsResults_B[minRMSE_index_B,"maxDepth"]
+
+
+#train and test model with given parameter, return RMSE
+TrainTestDForestfunction <- function(trainData, testData,form,numTrees,maxD)
+{
+    dForest <- rxDForest(form, data = trainData,
+                          method = "anova", maxDepth = maxD, nTree = numTrees,seed = 123)
+    rxPredict(dForest, data = testData, 
+              predVarNames = "cnt_Pred",
+              residVarNames = "cnt_Resid",
+              overwrite = TRUE, computeResiduals = TRUE)
+    result <- rxSummary(~ cnt_Resid, 
+                     data = testData, summaryStats = "Mean", 
+                     transforms = list(cnt_Resid = cnt_Resid^2)
+    )$sDataFrame
+    
+    return(c(numTrees,maxD,sqrt(result[1,2])))
+
+}
+
+
+
+
