@@ -189,10 +189,10 @@ lagXdf <- rxDataStep(inData = cleanXdf, outFile = outFileLag,
                      transformVars = "cnt", overwrite = TRUE)
 
 
-### Step 3: Prepare Training and Test Datasets
+### Step 3: Prepare Training, Test and Score Datasets
 
-# Split data by "yr" so that the training data contains records 
-# for the year 2011 and the test data contains records for 2012.
+# Split data by "yr" so that the training and test data contains records 
+# for the year 2011 and the score data contains records for 2012.
 rxSplit(inData = lagXdf,
         outFilesBase = paste0(td, "/modelData"),
         splitByFactor = "yr",
@@ -200,33 +200,119 @@ rxSplit(inData = lagXdf,
         reportProgress = 0,
         verbose = 0)
 
+# Point to the .xdf files for the training & test and score set.
+trainTest <- RxXdfData(paste0(td, "/modelData.yr.0.xdf"))
+score <- RxXdfData(paste0(td, "/modelData.yr.1.xdf"))
+
+# Randomly split records for the year 2011 into training and test sets
+# for sweeping parameters.
+# 80% of data as training and 20% as test.
+rxSplit(inData = trainTest,
+        outFilesBase = paste0(td, "/sweepData"),
+        outFileSuffixes = c("Train", "Test"),
+        splitByFactor = "splitVar",
+        overwrite = TRUE,
+        transforms = list(splitVar = factor(sample(c("Train", "Test"),
+                                                   size = .rxNumRows,
+                                                   replace = TRUE,
+                                                   prob = c(.80, .20)),
+                                            levels = c("Train", "Test"))),
+        rngSeed = 17,
+        consoleOutput = TRUE)
+
 # Point to the .xdf files for the training and test set.
-train <- RxXdfData(paste0(td, "/modelData.yr.0.xdf"))
-test <- RxXdfData(paste0(td, "/modelData.yr.1.xdf"))
+train <- RxXdfData(paste0(td, "/sweepData.splitVar.Train.xdf"))
+test <- RxXdfData(paste0(td, "/sweepData.splitVar.Test.xdf"))
 
 
-### Step 4: Choose and apply a learning algorithm (Decision Forest Regression)
+### Step 4: Choose and apply Decision Forest Regression models
+###         Sweep parameters to find the best hyperparameters
 
-# Define the hourly lags. 
-newHourFeatures <- paste("cnt_", seq(12), "hour", sep = "")
+# Define a function to train and test models with given parameters
+# and then return Root Mean Squared Error (RMSE) as the performance metric.
+TrainTestDForestfunction <- function(trainData, testData, form, numTrees, maxD)
+{
+  # Build decision forest regression models with given parameters.
+  dForest <- rxDForest(form, data = trainData,
+                       method = "anova", 
+                       maxDepth = maxD, 
+                       nTree = numTrees,
+                       seed = 123)
+  # Predict the the number of bike rental on the test data.
+  rxPredict(dForest, data = testData, 
+            predVarNames = "cnt_Pred",
+            residVarNames = "cnt_Resid",
+            overwrite = TRUE, 
+            computeResiduals = TRUE)
+  # Calcualte the RMSE.
+  result <- rxSummary(~ cnt_Resid, 
+                      data = testData, 
+                      summaryStats = "Mean", 
+                      transforms = list(cnt_Resid = cnt_Resid^2)
+  )$sDataFrame
+  # Return lists of number of trees, maximum depth and RMSE.
+  return(c(numTrees, maxD, sqrt(result[1,2])))
+}
+
+# Define a list of parameters to sweep through. 
+# To save time, we only sweep 9 combinations of number of trees and max tree depth.
+numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
+maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
+
+# Switch to local parallel compute context to sweep through parameters in parallel.
+rxSetComputeContext(RxLocalParallel())
+
+# Define a function to sweep and select the optimal parameter combination.
+findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {
+  # Sweep different combination of parameters. 
+  sweepResults <- rxExec(DFfunction, train, test, form, nTreeArg, maxDepthArg)
+  # Sort the nested list by the third element (RMSE) in the list in ascending order. 
+  sortResults <- sweepResults[order(unlist(lapply(sweepResults, `[[`, 3)))]
+  # Select the optimal parameter combination.
+  nTreeOptimal <- sortResults[[1]][1]
+  maxDepthOptimal <- sortResults[[1]][2]
+  # Return the optimal values.
+  return(c(nTreeOptimal, maxDepthOptimal))
+}
 
 # Set A = weather + holiday + weekday + weekend features for the predicted day.
 # Build a formula for the regression model and remove the "yr", 
 # which is used to split the training and test data.
-formA <- formula(train, depVars = "cnt", varsToDrop = c("RowNum", "yr", newHourFeatures))
+newHourFeatures <- paste("cnt_", seq(12), "hour", sep = "")  # Define the hourly lags.
+formA <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", newHourFeatures))
 
-# Fit Decision Forest Regression model.
+# Find the optimal parameters for Set A.
+optimalResultsA <- findOptimal(TrainTestDForestfunction, 
+                               train, test, formA,
+                               rxElemArg(numTreesToSweep), 
+                               rxElemArg(maxDepthToSweep))
+
+# Use the optimal parameters to fit a model for feature Set A.
+nTreeOptimalA <- optimalResultsA[[1]]
+maxDepthOptimalA <- optimalResultsA[[2]]
 dForestA <- rxDForest(formA, data = train,
-                      method = "anova", maxDepth = 10, nTree = 20,
+                      method = "anova", 
+                      maxDepth = maxDepthOptimalA, 
+                      nTree = nTreeOptimalA,
                       importance = TRUE, seed = 123)
 
 # Set B = number of bikes that were rented in each of the 
 # previous 12 hours, which captures very recent demand for the bikes.
-formB <- formula(train, depVars = "cnt", varsToDrop = c("RowNum", "yr"))
+formB <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", "yr"))
 
-# Fit Decision Forest Regression model.
+# Find the optimal parameters for Set B.
+optimalResultsB <- findOptimal(TrainTestDForestfunction, 
+                               train, test, formB,
+                               rxElemArg(numTreesToSweep), 
+                               rxElemArg(maxDepthToSweep))
+
+# Use the optimal parameters to fit a model for feature Set B.
+nTreeOptimalB <- optimalResultsB[[1]]
+maxDepthOptimalB <- optimalResultsB[[2]]
 dForestB <- rxDForest(formB, data = train,
-                      method = "anova", maxDepth = 10, nTree = 20,
+                      method = "anova", 
+                      maxDepth = maxDepthOptimalB, 
+                      nTree = nTreeOptimalB,
                       importance = TRUE, seed = 123)
 
 # Plot two dotchart of the variable importance as measured by 
@@ -245,24 +331,25 @@ par(mfrow = c(1, 1))
 ### Step 5: Predict over new data
 
 # Set A: Predict the probability on the test dataset.
-rxPredict(dForestA, data = test, 
+rxPredict(dForestA, data = score, 
           predVarNames = "cnt_Pred_A",
           residVarNames = "cnt_Resid_A",
           overwrite = TRUE, computeResiduals = TRUE)
 
 # Set B: Predict the probability on the test dataset.
-rxPredict(dForestB, data = test, 
+rxPredict(dForestB, data = score, 
           predVarNames = "cnt_Pred_B",
           residVarNames = "cnt_Resid_B",
           overwrite = TRUE, computeResiduals = TRUE)
 
-# Calculate three statistical measures: 
+# Calculate three statistical metrics: 
 # Mean Absolute Error (MAE), 
 # Root Mean Squared Error (RMSE), and 
 # Relative Absolute Error (RAE).
-sum <- rxSummary(~ cnt_Resid_A_abs + cnt_Resid_A_2 + cnt_rel_A +
+sumResults <- rxSummary(~ cnt_Resid_A_abs + cnt_Resid_A_2 + cnt_rel_A +
                    cnt_Resid_B_abs + cnt_Resid_B_2 + cnt_rel_B,
-                 data = test, summaryStats = "Mean", 
+                 data = score, 
+                 summaryStats = "Mean", 
                  transforms = list(cnt_Resid_A_abs = abs(cnt_Resid_A), 
                                    cnt_Resid_A_2 = cnt_Resid_A^2, 
                                    cnt_rel_A = abs(cnt_Resid_A)/cnt,
@@ -275,83 +362,11 @@ sum <- rxSummary(~ cnt_Resid_A_abs + cnt_Resid_A_2 + cnt_rel_A +
 features <- c("baseline: weather + holiday + weekday + weekend features for the predicted day",
               "baseline + previous 12 hours demand")
 
-# List all measures in a data frame.
-measures <- data.frame(Features = features,
-                       MAE = c(sum[1, 2], sum[4, 2]),
-                       RMSE = c(sqrt(sum[2, 2]), sqrt(sum[5, 2])),
-                       RAE = c(sum[3, 2], sum[6, 2]))
+# List all metrics in a data frame.
+metrics <- data.frame(Features = features,
+                       MAE = c(sumResults[1, 2], sumResults[4, 2]),
+                       RMSE = c(sqrt(sumResults[2, 2]), sqrt(sumResults[5, 2])),
+                       RAE = c(sumResults[3, 2], sumResults[6, 2]))
 
-# Review the measures.
-measures
-
-################################################################################################
-##Sweep parameters to find the best hyperparameters for Decision Forest
-################################################################################################
-# Split training data into train and validation for sweeping parameters
-rxSplit(inData = train,
-        outFilesBase = paste0(td, "/sweepData"),
-        outFileSuffixes = c("Train", "Validation"),
-        splitByFactor = "splitVar",
-        overwrite = TRUE,
-        transforms = list(
-          splitVar = factor(sample(c("Train", "Validation"),
-                                   size = .rxNumRows,
-                                   replace = TRUE,
-                                   prob = c(.80, .20)),
-                            levels = c("Train", "Validation"))),
-        rngSeed = 17,
-        consoleOutput = TRUE)
-
-sweepTrain <- RxXdfData(paste0(td, "/sweepData.splitVar.Train.xdf"))
-sweepValidation <- RxXdfData(paste0(td, "/sweepData.splitVar.Validation.xdf"))
-
-
-#list of parameters to sweep through. To save time, we only sweep 9 combinations of number of trees and max tree depth
-numTreesToSweep <- rep(seq(20,60,20),3)
-maxDepthToSweep <- rep(seq(10,30,10),each=3)
-
-#switch to local parallel compute context to sweep through parameters in parallel
-rxSetComputeContext(RxLocalParallel())
-
-#train and test model with given parameter, return RMSE
-TrainTestDForestfunction <- function(trainData, testData,form,numTrees,maxD)
-{
-  dForest <- rxDForest(form, data = trainData,
-                       method = "anova", maxDepth = maxD, nTree = numTrees,seed = 123)
-  rxPredict(dForest, data = testData, 
-            predVarNames = "cnt_Pred",
-            residVarNames = "cnt_Resid",
-            overwrite = TRUE, computeResiduals = TRUE)
-  result <- rxSummary(~ cnt_Resid, 
-                      data = testData, summaryStats = "Mean", 
-                      transforms = list(cnt_Resid = cnt_Resid^2)
-  )$sDataFrame
-  
-  return(c(numTrees,maxD,sqrt(result[1,2])))
-  
-}
-
-
-#Sweep and select the optimal parameters for feature set A
-sweepParamsResults_A <- rxExec(TrainTestDForestfunction, sweepTrain, sweepValidation,formA,rxElemArg(numTreesToSweep),rxElemArg(maxDepthToSweep))
-sweepParamsResults_A <- t(data.frame(sweepParamsResults_A))
-colnames(sweepParamsResults_A) <- c('numTrees','maxDepth','RMSE')
-rownames(sweepParamsResults_A) <- seq(1,nrow(sweepParamsResults_A),1)
-minRMSE_index_A = which.min(sweepParamsResults_A[,"RMSE"])[[1]]
-numTrees_optimal_A = sweepParamsResults_A[minRMSE_index_A,"numTrees"]
-maxDepth_optimal_A = sweepParamsResults_A[minRMSE_index_A,"maxDepth"]
-
-#Sweep and select the optimal parameters for feature set B
-sweepParamsResults_B <- rxExec(TrainTestDForestfunction, sweepTrain, sweepValidation,formB,rxElemArg(numTreesToSweep),rxElemArg(maxDepthToSweep))
-sweepParamsResults_B <- t(data.frame(sweepParamsResults_B))
-colnames(sweepParamsResults_B) <- c('numTrees','maxDepth','RMSE')
-rownames(sweepParamsResults_B) <- seq(1,nrow(sweepParamsResults_B),1)
-minRMSE_index_B = which.min(sweepParamsResults_B[,"RMSE"])[[1]]
-numTrees_optimal_B = sweepParamsResults_B[minRMSE_index_B,"numTrees"]
-maxDepth_optimal_B = sweepParamsResults_B[minRMSE_index_B,"maxDepth"]
-
-
-
-
-
-
+# Review the metrics
+metrics
