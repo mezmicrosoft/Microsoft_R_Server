@@ -33,7 +33,7 @@
 
 # The following scripts include five basic steps of building 
 # this example using Microsoft R Server.
-# This execution might require more than two minutes.
+# This execution might require more than ten minutes.
 
 
 ### Step 0: Get Started
@@ -265,7 +265,7 @@ rxSetComputeContext(RxLocalParallel())
 # Define a function to sweep and select the optimal parameter combination.
 findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {
   # Sweep different combination of parameters. 
-  sweepResults <- rxExec(DFfunction, train, test, form, nTreeArg, maxDepthArg)
+  sweepResults <- rxExec(DFfunction, train, test, form, rxElemArg(nTreeArg), rxElemArg(maxDepthArg))
   # Sort the nested list by the third element (RMSE) in the list in ascending order. 
   sortResults <- sweepResults[order(unlist(lapply(sweepResults, `[[`, 3)))]
   # Select the optimal parameter combination.
@@ -284,8 +284,8 @@ formA <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", newHourFeatu
 # Find the optimal parameters for Set A.
 optimalResultsA <- findOptimal(TrainTestDForestfunction, 
                                train, test, formA,
-                               rxElemArg(numTreesToSweep), 
-                               rxElemArg(maxDepthToSweep))
+                               numTreesToSweep, 
+                               maxDepthToSweep)
 
 # Use the optimal parameters to fit a model for feature Set A.
 nTreeOptimalA <- optimalResultsA[[1]]
@@ -303,8 +303,8 @@ formB <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", "yr"))
 # Find the optimal parameters for Set B.
 optimalResultsB <- findOptimal(TrainTestDForestfunction, 
                                train, test, formB,
-                               rxElemArg(numTreesToSweep), 
-                               rxElemArg(maxDepthToSweep))
+                               numTreesToSweep, 
+                               maxDepthToSweep)
 
 # Use the optimal parameters to fit a model for feature Set B.
 nTreeOptimalB <- optimalResultsB[[1]]
