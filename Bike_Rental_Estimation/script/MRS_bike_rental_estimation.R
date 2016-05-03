@@ -1,39 +1,7 @@
-## Regression: Demand estimation with Microsoft R Server
-
-# This example demonstrates the how to solve a real world problem:
-# predicting bike rental demand, using Microsoft R Server. 
-
-# The dataset contains 17,379 rows and 17 columns, 
-# each row representing the number of bike rentals within 
-# a specific hour of a day in the years 2011 or 2012. 
-# Weather conditions (such as temperature, humidity, 
-# and wind speed) were included in this raw feature set, 
-# and the dates were categorized as holiday vs. 
-# weekday etc.
-
-# The field to predict is "cnt", which contain a count value 
-# ranging from 1 to 977, representing the number
-# of bike rentals within a specific hour.
-
-# We built two models using the same algorithm, 
-# but with two different training datasets. The two training 
-# datasets that we constructed were all based 
-# on the same raw input data, but we added different additional 
-# features to each training set.
-
-# Set A = weather + holiday + weekday + weekend features 
-# for the predicted day
-# Set B = number of bikes that were rented in each of the 
-# previous 12 hours, which captures very recent demand for the bikes.
-
-# The two training datasets were built by combining the feature set 
-# as follows:
-# Training set 1: feature set A only
-# Training set 2: feature sets A+B
+## Bike Rental Demand Estimation with Microsoft R Server
 
 # The following scripts include five basic steps of building 
 # this example using Microsoft R Server.
-# This execution might require more than ten minutes.
 
 
 ### Step 0: Get Started
