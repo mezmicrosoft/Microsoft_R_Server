@@ -1,39 +1,7 @@
-## Regression: Demand estimation with Microsoft R Server
-
-# This example demonstrates the how to solve a real world problem:
-# predicting bike rental demand, using Microsoft R Server. 
-
-# The dataset contains 17,379 rows and 17 columns, 
-# each row representing the number of bike rentals within 
-# a specific hour of a day in the years 2011 or 2012. 
-# Weather conditions (such as temperature, humidity, 
-# and wind speed) were included in this raw feature set, 
-# and the dates were categorized as holiday vs. 
-# weekday etc.
-
-# The field to predict is "cnt", which contain a count value 
-# ranging from 1 to 977, representing the number
-# of bike rentals within a specific hour.
-
-# We built two models using the same algorithm, 
-# but with two different training datasets. The two training 
-# datasets that we constructed were all based 
-# on the same raw input data, but we added different additional 
-# features to each training set.
-
-# Set A = weather + holiday + weekday + weekend features 
-# for the predicted day
-# Set B = number of bikes that were rented in each of the 
-# previous 12 hours, which captures very recent demand for the bikes.
-
-# The two training datasets were built by combining the feature set 
-# as follows:
-# Training set 1: feature set A only
-# Training set 2: feature sets A+B
+## Bike Rental Demand Estimation with Microsoft R Server
 
 # The following scripts include five basic steps of building 
 # this example using Microsoft R Server.
-# This execution might require more than two minutes.
 
 
 ### Step 0: Get Started
@@ -265,7 +233,7 @@ rxSetComputeContext(RxLocalParallel())
 # Define a function to sweep and select the optimal parameter combination.
 findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {
   # Sweep different combination of parameters. 
-  sweepResults <- rxExec(DFfunction, train, test, form, nTreeArg, maxDepthArg)
+  sweepResults <- rxExec(DFfunction, train, test, form, rxElemArg(nTreeArg), rxElemArg(maxDepthArg))
   # Sort the nested list by the third element (RMSE) in the list in ascending order. 
   sortResults <- sweepResults[order(unlist(lapply(sweepResults, `[[`, 3)))]
   # Select the optimal parameter combination.
@@ -284,8 +252,8 @@ formA <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", newHourFeatu
 # Find the optimal parameters for Set A.
 optimalResultsA <- findOptimal(TrainTestDForestfunction, 
                                train, test, formA,
-                               rxElemArg(numTreesToSweep), 
-                               rxElemArg(maxDepthToSweep))
+                               numTreesToSweep, 
+                               maxDepthToSweep)
 
 # Use the optimal parameters to fit a model for feature Set A.
 nTreeOptimalA <- optimalResultsA[[1]]
@@ -303,8 +271,8 @@ formB <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", "yr"))
 # Find the optimal parameters for Set B.
 optimalResultsB <- findOptimal(TrainTestDForestfunction, 
                                train, test, formB,
-                               rxElemArg(numTreesToSweep), 
-                               rxElemArg(maxDepthToSweep))
+                               numTreesToSweep, 
+                               maxDepthToSweep)
 
 # Use the optimal parameters to fit a model for feature Set B.
 nTreeOptimalB <- optimalResultsB[[1]]
