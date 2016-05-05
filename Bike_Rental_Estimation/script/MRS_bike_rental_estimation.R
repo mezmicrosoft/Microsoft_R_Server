@@ -41,9 +41,6 @@ outFileLag <- paste0(td, "/lagData.xdf")
 
 ### Step 1: Import and Clean Data
 
-# Change compute context to parallel computing.
-rxSetComputeContext(RxLocalParallel())
-
 # Import date information (dteday, season, yr, mnth, hr, holiday, weekday, workingday)
 dateXdf <- rxImport(inData = inputeFileData,
                     outFile = outFileDate, overwrite = TRUE,
@@ -229,6 +226,9 @@ TrainTestDForestfunction <- function(trainData, testData, form, numTrees, maxD)
 # To save time, we only sweep 9 combinations of number of trees and max tree depth.
 numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
 maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
+
+# Change compute context to parallel computing.
+rxSetComputeContext(RxLocalParallel())
 
 # Define a function to sweep and select the optimal parameter combination.
 findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {

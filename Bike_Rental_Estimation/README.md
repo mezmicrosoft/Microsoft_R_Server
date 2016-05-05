@@ -38,13 +38,7 @@ Overall, there are five major steps of building this example using Microsoft R S
 
 ### <a name="step-1"></a>Step 1: Import and Clean Data
 
-Before importing the Bike Rental UCI dataset, we incorporate parallel computing on a local machine using the special compute context `RxLocalParallel` as follows:
-
-```r
-rxSetComputeContext(RxLocalParallel())
-```
-
-Since there are a small portion of missing records within the dataset, we use `rxDataStep()` to replace the missing records with the latest non-missing observations. `rxDataStep()` is good function to utilize for data manipulation. It transforms the input dataset chunk by chunk and saves the results to the output dataset.
+Firstly, we import the Bike Rental UCI dataset. Since there are a small portion of missing records within the dataset, we use `rxDataStep()` to replace the missing records with the latest non-missing observations. `rxDataStep()` is good function to utilize for data manipulation. It transforms the input dataset chunk by chunk and saves the results to the output dataset.
 
 ```r
 # Define the tranformation function for the rxDataStep.
@@ -211,7 +205,13 @@ numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
 maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
 ```
 
-We create another helper function to sweep and select the optimal parameter combination. Under local parallel compute context, `rxExec()` executes multiple runs of model training and evaluation with different parameters in parallel, which significantly speeds up parameter sweeping. When used in a compute context with multiple nodes, e.g. high-performance computing clusters and Hadoop, `rxExec()` can be used to distribute a large number of tasks to the nodes and run the tasks in parallel.
+We create another helper function to sweep and select the optimal parameter combination. Note that we incorporate parallel computing on a local machine using the special compute context `RxLocalParallel` as follows:
+
+```r
+rxSetComputeContext(RxLocalParallel())
+```
+
+Under local parallel compute context, `rxExec()` executes multiple runs of model training and evaluation with different parameters in parallel, which significantly speeds up parameter sweeping. When used in a compute context with multiple nodes, e.g. high-performance computing clusters and Hadoop, `rxExec()` can be used to distribute a large number of tasks to the nodes and run the tasks in parallel.
 
 ```r
 # Define a function to sweep and select the optimal parameter combination.
