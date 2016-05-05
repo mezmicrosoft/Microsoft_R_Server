@@ -258,7 +258,7 @@ optimalResultsA <- findOptimal(TrainTestDForestfunction,
 # Use the optimal parameters to fit a model for feature Set A.
 nTreeOptimalA <- optimalResultsA[[1]]
 maxDepthOptimalA <- optimalResultsA[[2]]
-dForestA <- rxDForest(formA, data = train,
+dForestA <- rxDForest(formA, data = trainTest,
                       method = "anova", 
                       maxDepth = maxDepthOptimalA, 
                       nTree = nTreeOptimalA,
@@ -277,7 +277,7 @@ optimalResultsB <- findOptimal(TrainTestDForestfunction,
 # Use the optimal parameters to fit a model for feature Set B.
 nTreeOptimalB <- optimalResultsB[[1]]
 maxDepthOptimalB <- optimalResultsB[[2]]
-dForestB <- rxDForest(formB, data = train,
+dForestB <- rxDForest(formB, data = trainTest,
                       method = "anova", 
                       maxDepth = maxDepthOptimalB, 
                       nTree = nTreeOptimalB,
