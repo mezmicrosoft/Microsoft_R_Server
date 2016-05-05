@@ -1,6 +1,8 @@
 # Bike Rental Demand Estimation with Microsoft R Server #
 
-Accurate demand forecasting empowers companies across various industries to perform effective production planning and resource allocation. Rented bicycle has become popular as a convenient and environmentally friendly transportation option. Accurate estimation of bike demand at different locations and different time will help bicycle-sharing systems better meet rental demand, allocate bikes based on estimated demand, and reduce storage cost. In this blog, we will walk through how to use Microsoft R Server (MRS) to build a regression model to predict bike rental demand. In the example below, we demonstrate an end-to-end machine learning solution development process in MRS, including data importing, data cleaning, feature engineering, parameter sweeping, and model training and evaluation.
+Rental bicycle has become popular as a convenient and environmentally friendly transportation option. Accurate estimation of bike demand at different locations and different time will help bicycle-sharing systems better meet rental demand and allocate bikes.
+
+In this blog, we will walk through how to use Microsoft R Server (MRS) to build a regression model to predict bike rental demand. In the example below, we demonstrate an end-to-end machine learning solution development process in MRS, including data importing, data cleaning, feature engineering, parameter sweeping, and model training and evaluation.
 
 ## Data ##
 
@@ -8,17 +10,17 @@ The Bike Rental UCI dataset is used as the input raw data for this sample. This 
 
 The dataset contains 17,379 rows and 17 columns, with each row representing the number of bike rentals within a specific hour of a day in the years 2011 or 2012. Weather conditions (such as temperature, humidity, and wind speed) are included in this raw feature set, and the dates are categorized as holiday vs. weekday etc.
 
-The field to predict is **cnt**, which contains a count value ranging from 1 to 977, representing the number of bike rentals within a specific hour.
+The field to predict is **_cnt_**, which contains a count value ranging from 1 to 977, representing the number of bike rentals within a specific hour.
 
 ## Model Overview ##
 
 In this example, we use historical bike rental counts as well as the weather condition data to predict the number of bike rentals within a specific hour in the future. We approach this problem as a regression problem, since the label column (number of rentals) contains continuous real numbers.
 
-Along this line, we split the raw data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. Specifically, we employ the Decision Forest Regression algorithm as the regression model and build two models on datasets of different feature sets. Finally, we evaluate their prediction performance. We will elaborate the details in the following subsections.
+Along this line, we split the raw data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. Specifically, we employ the Decision Forest Regression algorithm as the regression model and build two models on datasets of different feature sets. Finally, we evaluate their prediction performance. We will elaborate the details in the following sections.
 
 ## Microsoft R Server ##
 
-We build the models using the `RevoScaleR` library in MRS. The `RevoScaleR` library provides extremely fast statistical analysis on terabyte-class data sets without needing specialized hardware. `RevoScaleR`'s distributed computing capabilities can establish different computing context while remaining same `RevoScaleR` commands to manage and analyze data. A wide range of `rx` prefixed functions that include functionality for:
+We build the models using the `RevoScaleR` library in MRS. The `RevoScaleR` library provides extremely fast statistical analysis on terabyte-class datasets without needing specialized hardware. `RevoScaleR`'s distributed computing capabilities can establish different computing context while remaining same `RevoScaleR` commands to manage and analyze data. A wide range of `rx` prefixed functions that include functionality for:
 
 - Accessing external data sets (SAS, SPSS, ODBC, Teradata, and delimited and fixed format text) for analysis in R.
 - Efficiently storing and retrieving data in a high-performance data file.
@@ -31,14 +33,14 @@ We build the models using the `RevoScaleR` library in MRS. The `RevoScaleR` libr
 Overall, there are five major steps of building this example using Microsoft R Server:
 
 - [Step 1: Import and Clean Data](#step-1)
-- [Step 2: Feature Engineering](#step-2)
+- [Step 2: Perform Feature Engineering](#step-2)
 - [Step 3: Prepare Training, Test and Score Datasets](#step-3)
-- [Step 4: Train the Model](#step-4)
-- [Step 5: Test, Evaluate, and Compare the Model](#step-5)
+- [Step 4: Sweep Parameters and Train Regression Models](#step-4)
+- [Step 5: Test, Evaluate, and Compare Models](#step-5)
 
 ### <a name="step-1"></a>Step 1: Import and Clean Data
 
-Firstly, we import the Bike Rental UCI dataset. Since there are a small portion of missing records within the dataset, we use `rxDataStep()` to replace the missing records with the latest non-missing observations. `rxDataStep()` is good function to utilize for data manipulation. It transforms the input dataset chunk by chunk and saves the results to the output dataset.
+Firstly, we import the Bike Rental UCI dataset. Since there are a small portion of missing records within the dataset, we use `rxDataStep()` to replace the missing records with the latest non-missing observations. `rxDataStep()` is a commonly used function for data manipulation. It transforms the input dataset chunk by chunk and saves the results to the output dataset.
 
 ```r
 # Define the tranformation function for the rxDataStep.
@@ -54,16 +56,18 @@ xform <- function(dataList) {
 # Use rxDataStep to replace missings with the latest non-missing observations.
 cleanXdf <- rxDataStep(inData = mergeXdf, outFile = outFileClean, overwrite = TRUE,
                        # Apply the "last observation carried forward" operation.
-                       transformFunc = xform,
+                       transformFunc = xform,  
                        # Identify the features to apply the tranformation.
                        transformVars = c("weathersit", "temp", "atemp", "hum", "windspeed", "cnt"),
                        # Drop the "dteday" feature.
                        varsToDrop = "dteday")
 ```
 
-### <a name="step-2"></a>Step 2: Feature Engineering
+### <a name="step-2"></a>Step 2: Perform Feature Engineering
 
-In addition to the original features in the raw data, we add number of bikes that were rented in each of the previous 12 hours as features to provide better predictive power. We write a `computeLagFeatures()` helper function to compute the 12 lag features. Then the `computeLagFeatures()` function is applied on the bike data via the `rxDataStep()` function. Note that rxDataStep() processes data in chunk by chunk and lag feature computation requires data from previous rows. In computLagFeatures(), we use the internal function `.rxSet()` to save the last n rows of a chunk to a variable **lagData**. When processing the next chunk, we use another internal function `.rxGet()` to retrieve the values stored in **lagData** and compute the lag features.
+In addition to the original features in the raw data, we add number of bikes rented in each of the previous 12 hours as features to provide better predictive power. We create a `computeLagFeatures()` helper function to compute the 12 lag features and use it as the transformation function in `rxDataStep()`.
+
+Note that `rxDataStep()` processes data chunk by chunk and lag feature computation requires data from previous rows. In `computLagFeatures()`, we use the internal function `.rxSet()` to save the last _n_ rows of a chunk to a variable **_lagData_**. When processing the next chunk, we use another internal function `.rxGet()` to retrieve the values stored in **_lagData_** and compute the lag features.
 
 ```r
 # Add number of bikes that were rented in each of
@@ -116,7 +120,7 @@ lagXdf <- rxDataStep(inData = cleanXdf, outFile = outFileLag,
 
 ### <a name="step-3"></a>Step 3: Prepare Training, Test and Score Datasets
 
-Before training the regression model, we first split data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. In order to find the best combination of parameters for  the regression model, we further divide the year 2011 data into the training and test datasets - we randomly select 80% records from year 2011 data to train regression models with various combination of parameters, and use the residual 20% data to evaluate the models obtained and determine the optimal combination.
+Before training the regression model, we split data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. In order to obtain the best combination of parameters for regression models, we further divide year 2011 data into training and test datasets - 80% records are randomly selected to train regression models with various combinations of parameters, and the rest 20% are used to evaluate the models obtained and determine the optimal combination.
 
 ```r
 # Split data by "yr" so that the training and test data contains records
@@ -153,20 +157,14 @@ train <- RxXdfData(paste0(td, "/sweepData.splitVar.Train.xdf"))
 test <- RxXdfData(paste0(td, "/sweepData.splitVar.Test.xdf"))
 ```
 
-### <a name="step-4"></a>Step 4: Sweep Parameter and Train the Model
+### <a name="step-4"></a>Step 4: Sweep Parameters and Train Regression Models
 
 In this step, we construct two training datasets based on the same raw input data, but with different sets of features:
 
 - Set A = weather + holiday + weekday + weekend features for the predicted day
-- Set B = number of bikes that were rented in each of the previous 12 hours, which captures very recent demand for the bikes
+- Set B = Set A + number of bikes rented in each of the previous 12 hours, which captures very recent demand for the bikes
 
-Then, two training datasets are built by combining the feature set as follows:
-- Training set 1: feature set A only
-- Training set 2: feature sets A+B
-
-For each training dataset, a list of Decision Forest Regression models are trained with various combination of parameters. The test data is used to determine the optimal parameters.
-
-Specifically, we first create a helper function to evaluate the performance of a model trained with a given combination of number of trees and maximum depth. We use _Root Mean Squared Error (RMSE)_ as the evaluation metric.
+In order to perform parameter sweeping, we create a helper function to evaluate the performance of a model trained with a given combination of number of trees and maximum depth. We use _Root Mean Squared Error (RMSE)_ as the evaluation metric.
 
 ```r
 # Define a function to train and test models with given parameters
@@ -196,22 +194,7 @@ TrainTestDForestfunction <- function(trainData, testData, form, numTrees, maxD)
 }
 ```
 
-Next, we define the 9 combinations of parameters the model going to explore. We create a small number of combinations for demonstration purpose. A much larger number of parameter combinations are usually swept through in data science solution development.
-
-```r
-# Define a list of parameters to sweep through.
-# To save time, we only sweep 9 combinations of number of trees and max tree depth.
-numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
-maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
-```
-
-We create another helper function to sweep and select the optimal parameter combination. Note that we incorporate parallel computing on a local machine using the special compute context `RxLocalParallel` as follows:
-
-```r
-rxSetComputeContext(RxLocalParallel())
-```
-
-Under local parallel compute context, `rxExec()` executes multiple runs of model training and evaluation with different parameters in parallel, which significantly speeds up parameter sweeping. When used in a compute context with multiple nodes, e.g. high-performance computing clusters and Hadoop, `rxExec()` can be used to distribute a large number of tasks to the nodes and run the tasks in parallel.
+The following is another helper function to sweep and select the optimal parameter combination. Under local parallel compute context (`rxSetComputeContext(RxLocalParallel())`), `rxExec()` executes multiple runs of model training and evaluation with different parameters in parallel, which significantly speeds up parameter sweeping. When used in a compute context with multiple nodes, e.g. high-performance computing clusters and Hadoop, `rxExec()` can be used to distribute a large number of tasks to the nodes and run the tasks in parallel.
 
 ```r
 # Define a function to sweep and select the optimal parameter combination.
@@ -228,7 +211,16 @@ findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {
 }
 ```
 
-We first find the optimal parameter combination on feature set A, and get the trained optimal regression model for set A.
+A large number of parameter combinations are usually swept through in modeling process. For demonstration purpose, we use 9 combinations of parameters in this example.
+
+```r
+# Define a list of parameters to sweep through.
+# To save time, we only sweep 9 combinations of number of trees and max tree depth.
+numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
+maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
+```
+
+Next, we find the best parameter combination and get the optimal regression model for each training dataset. The same process is repeated on feature set B.
 
 ```r
 # Set A = weather + holiday + weekday + weekend features for the predicted day.
@@ -246,45 +238,22 @@ optimalResultsA <- findOptimal(TrainTestDForestfunction,
 # Use the optimal parameters to fit a model for feature Set A.
 nTreeOptimalA <- optimalResultsA[[1]]
 maxDepthOptimalA <- optimalResultsA[[2]]
-dForestA <- rxDForest(formA, data = train,
+dForestA <- rxDForest(formA, data = trainTest,
                       method = "anova",
                       maxDepth = maxDepthOptimalA,
                       nTree = nTreeOptimalA,
                       importance = TRUE, seed = 123)
 ```
 
-Then we repeat the same process on feature set B.
-
-```r
-# Set B = number of bikes that were rented in each of the
-# previous 12 hours, which captures very recent demand for the bikes.
-formB <- formula(train, depVars = "cnt", varsToDrop = c("splitVar", "yr"))
-
-# Find the optimal parameters for Set B.
-optimalResultsB <- findOptimal(TrainTestDForestfunction,
-                               train, test, formB,
-                               numTreesToSweep,
-                               maxDepthToSweep)
-
-# Use the optimal parameters to fit a model for feature Set B.
-nTreeOptimalB <- optimalResultsB[[1]]
-maxDepthOptimalB <- optimalResultsB[[2]]
-dForestB <- rxDForest(formB, data = train,
-                      method = "anova",
-                      maxDepth = maxDepthOptimalB,
-                      nTree = nTreeOptimalB,
-                      importance = TRUE, seed = 123)
-```
-
-Finally, we plot the dot charts of the variable importance and the out-of-bag error rates versus the number of trees for the two optimal decision forest models.
+Finally, we plot the dot charts of the variable importance and the out-of-bag error rates for the two optimal decision forest models.
 
 ![](https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Bike_Rental_Estimation/image/1.png)
 
 ![](https://raw.githubusercontent.com/mezmicrosoft/Microsoft_R_Server/master/Bike_Rental_Estimation/image/2.png)
 
-### <a name="step-5"></a>Step 5: Test, Evaluate, and Compare the Model
+### <a name="step-5"></a>Step 5: Test, Evaluate, and Compare Models
 
-In this step, we use the `rxPredict()` function to predict the bike rental number on the score dataset, and compare the two regression models over three performance metrics - _Mean Absolute Error (MAE)_, _Root Mean Squared Error (RMSE)_, and _Relative Absolute Error (RAE)_.
+In this step, we use the `rxPredict()` function to predict the bike rental demand on the score dataset, and compare the two regression models over three performance metrics - _Mean Absolute Error (MAE)_, _Root Mean Squared Error (RMSE)_, and _Relative Absolute Error (RAE)_.
 
 ```r
 # Set A: Predict the probability on the test dataset.
@@ -324,9 +293,6 @@ metrics <- data.frame(Features = features,
                        MAE = c(sumResults[1, 2], sumResults[4, 2]),
                        RMSE = c(sqrt(sumResults[2, 2]), sqrt(sumResults[5, 2])),
                        RAE = c(sumResults[3, 2], sumResults[6, 2]))
-
-# Review the metrics
-metrics
 ```
 
 Based on all three metrics listed below, the regression model built on feature set B outperforms the one built on feature set A. This result is not surprising, since from the variable importance chart we can see, the lag features play a critical part in the regression model. Adding this set of feature into feature set A definitely leads to better performance (Feature set B = Feature A + lag features).
