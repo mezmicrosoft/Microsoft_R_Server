@@ -41,6 +41,9 @@ outFileLag <- paste0(td, "/lagData.xdf")
 
 ### Step 1: Import and Clean Data
 
+# Change compute context to parallel computing.
+rxSetComputeContext(RxLocalParallel())
+
 # Import date information (dteday, season, yr, mnth, hr, holiday, weekday, workingday)
 dateXdf <- rxImport(inData = inputeFileData,
                     outFile = outFileDate, overwrite = TRUE,
