@@ -301,5 +301,3 @@ Feature Set | MAE | RMSE | RAE
 --- | --- | --- | ---
 A | 101.34848 | 146.9973 | 0.9454142
 B | 62.48245 | 105.6198 | 0.3737669
-
-Follow this link for source code and datasets: [Bike Rental Demand Estimation with Microsoft R Server](https://github.com/mezmicrosoft/Microsoft_R_Server/tree/master/Bike_Rental_Estimation)
