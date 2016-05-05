@@ -230,9 +230,6 @@ TrainTestDForestfunction <- function(trainData, testData, form, numTrees, maxD)
 numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
 maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
 
-# Switch to local parallel compute context to sweep through parameters in parallel.
-rxSetComputeContext(RxLocalParallel())
-
 # Define a function to sweep and select the optimal parameter combination.
 findOptimal <- function(DFfunction, train, test, form, nTreeArg, maxDepthArg) {
   # Sweep different combination of parameters. 
