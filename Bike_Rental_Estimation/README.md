@@ -8,7 +8,7 @@ In this blog, we will walk through how to use Microsoft R Server (MRS) to build 
 
 The Bike Rental UCI dataset is used as the input raw data for this sample. This dataset is based on real-world data from the Capital Bikeshare company, which operates a bike rental network in Washington DC in the United States.
 
-The dataset contains 17,379 rows and 17 columns, with each row representing the number of bike rentals within a specific hour of a day in the years 2011 or 2012. Weather conditions (such as temperature, humidity, and wind speed) are included in this raw feature set, and the dates are categorized as holiday vs. weekday etc.
+The dataset contains 17,379 rows and 17 columns, with each row representing the number of bike rentals within a specific hour of a day in the years 2011 or 2012. Weather conditions (such as temperature, humidity, and wind speed) are included in the raw data, and the dates are categorized as holiday vs. weekday etc.
 
 The field to predict is **_cnt_**, which contains a count value ranging from 1 to 977, representing the number of bike rentals within a specific hour.
 
@@ -16,7 +16,7 @@ The field to predict is **_cnt_**, which contains a count value ranging from 1 t
 
 In this example, we use historical bike rental counts as well as the weather condition data to predict the number of bike rentals within a specific hour in the future. We approach this problem as a regression problem, since the label column (number of rentals) contains continuous real numbers.
 
-Along this line, we split the raw data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. Specifically, we employ the Decision Forest Regression algorithm as the regression model and build two models on datasets of different feature sets. Finally, we evaluate their prediction performance. We will elaborate the details in the following sections.
+Along this line, we split the raw data into two parts - data records in year 2011 to learn the regression model and data records in year 2012 to score and evaluate the model. Specifically, we employ the Decision Forest Regression algorithm as the regression model and build two models on different feature sets. Finally, we evaluate their prediction performance. We will elaborate the details in the following sections.
 
 ## Microsoft R Server ##
 
@@ -220,7 +220,7 @@ numTreesToSweep <- rep(seq(20, 60, 20), times = 3)
 maxDepthToSweep <- rep(seq(10, 30, 10), each = 3)
 ```
 
-Next, we find the best parameter combination and get the optimal regression model for each training dataset. The same process is repeated on feature set B.
+Next, we find the best parameter combination and get the optimal regression model for each training dataset. For simplicity, we only present the process for Set A.
 
 ```r
 # Set A = weather + holiday + weekday + weekend features for the predicted day.
@@ -295,11 +295,11 @@ metrics <- data.frame(Features = features,
                        RAE = c(sumResults[3, 2], sumResults[6, 2]))
 ```
 
-Based on all three metrics listed below, the regression model built on feature set B outperforms the one built on feature set A. This result is not surprising, since from the variable importance chart we can see, the lag features play a critical part in the regression model. Adding this set of feature into feature set A definitely leads to better performance (Feature set B = Feature A + lag features).
+Based on all three metrics listed below, the regression model built on feature set B outperforms the one built on feature set A. This result is not surprising, since from the variable importance chart we can see, the lag features play a critical part in the regression model. Adding this set of features can lead to better performance.
 
 Feature Set | MAE | RMSE | RAE
 --- | --- | --- | ---
-A | 100.8536 | 145.5507 | 0.9498727
-B | 62.1749 | 103.4644 | 0.3799470
+A | 101.34848 | 146.9973 | 0.9454142
+B | 62.48245 | 105.6198 | 0.3737669
 
 Follow this link for source code and datasets: [Bike Rental Demand Estimation with Microsoft R Server](https://github.com/mezmicrosoft/Microsoft_R_Server/tree/master/Bike_Rental_Estimation)
